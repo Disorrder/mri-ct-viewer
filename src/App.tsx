@@ -714,7 +714,7 @@ function SinglePlaneOverlay({
 }
 
 /** Smallest "nice" cm step (…0.1, 0.2, 0.5, 1, 2, 5, 10…) that is at least `minPx` wide on screen. */
-function niceCmStep(minPx: number, pxPerCm: number): number {
+export function niceCmStep(minPx: number, pxPerCm: number): number {
   const minCm = minPx / pxPerCm;
   const pow = Math.pow(10, Math.floor(Math.log10(minCm)));
   for (const m of [1, 2, 5]) if (m * pow >= minCm) return m * pow;
@@ -728,7 +728,7 @@ function niceCmStep(minPx: number, pxPerCm: number): number {
  * subdivide each labelled interval, but are dropped once they'd be denser than
  * MIN_TICK_PX. Returns the tick step and how many ticks make up one label.
  */
-function rulerScheme(pxPerCm: number, minLabelPx: number) {
+export function rulerScheme(pxPerCm: number, minLabelPx: number) {
   const labelCm = niceCmStep(minLabelPx, pxPerCm);
   const mant = Math.round(labelCm / Math.pow(10, Math.floor(Math.log10(labelCm) + 1e-9))); // 1, 2 or 5
   const sub = mant === 5 ? 5 : 2; // subdivisions that keep minor ticks on nice values
@@ -738,7 +738,7 @@ function rulerScheme(pxPerCm: number, minLabelPx: number) {
 }
 
 /** Format a cm value with just enough decimals for its step (1→"5", 0.5→"1.5", 0.05→"0.15"). */
-function fmtCm(cm: number, stepCm: number): string {
+export function fmtCm(cm: number, stepCm: number): string {
   let d = 0;
   for (let s = stepCm; Math.abs(s - Math.round(s)) > 1e-9 && d < 4; s *= 10) d++;
   return cm.toFixed(d);
