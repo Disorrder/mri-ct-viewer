@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-// Source currently lives in App.tsx; the refactor moves it to src/lib/ruler.ts
-// and this import path updates with it.
-import { fmtCm, niceCmStep, rulerScheme } from "../../src/App";
+import { fmtCm, niceCmStep, rulerScheme } from "../../src/lib/ruler";
 
 describe("niceCmStep", () => {
   it("snaps up to the nearest 1/2/5 * 10^k that is at least minPx wide", () => {
