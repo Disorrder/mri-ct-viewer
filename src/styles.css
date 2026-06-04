@@ -1,0 +1,585 @@
+:root {
+  color-scheme: dark;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: #0a0c11;
+  overscroll-behavior: none;
+}
+
+.app,
+.canvas-host {
+  position: absolute;
+  inset: 0;
+}
+
+/* Touch gestures (orbit / pinch) belong to the canvas, not the page scroll. */
+.canvas-host {
+  touch-action: none;
+}
+
+.canvas-host canvas {
+  display: block;
+  touch-action: none;
+}
+
+/* --- Header / metadata panel ------------------------------------------- */
+.info {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 320px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: rgba(14, 17, 24, 0.82);
+  border: 1px solid rgba(120, 160, 220, 0.18);
+  backdrop-filter: blur(8px);
+  color: #d7e0ee;
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+
+.info h1 {
+  margin: 0 0 2px;
+  font-size: 15px;
+  letter-spacing: 0.2px;
+  color: #eaf1fb;
+}
+
+.info .sub {
+  margin: 0 0 12px;
+  font-size: 11px;
+  color: #8c9bb4;
+}
+
+.info dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 12px;
+  margin: 0;
+}
+
+.info dt {
+  color: #7f93b3;
+  white-space: nowrap;
+}
+
+.info dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #e6ecf6;
+}
+
+.affine {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(120, 160, 220, 0.14);
+}
+
+.affine-title {
+  color: #7f93b3;
+  margin-bottom: 4px;
+}
+
+.affine table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.affine td {
+  text-align: right;
+  padding: 1px 4px;
+  color: #c4d2e8;
+  font-size: 11px;
+}
+
+.info .hint {
+  margin: 12px 0 0;
+  font-size: 11px;
+  color: #8c9bb4;
+  font-style: italic;
+}
+
+/* --- Loading / error toast --------------------------------------------- */
+.status {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(14, 17, 24, 0.9);
+  border: 1px solid rgba(120, 160, 220, 0.2);
+  color: #cdd8ea;
+  font-size: 12px;
+}
+
+.status.error {
+  border-color: rgba(220, 90, 90, 0.5);
+  color: #ffb4b4;
+  max-width: 70vw;
+}
+
+/* --- Live performance overlay (FPS/CPU/GPU/RAM) ------------------------ */
+.stats {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  width: 188px;
+  padding: 10px 12px 11px;
+  border-radius: 12px;
+  background: rgba(14, 17, 24, 0.82);
+  border: 1px solid rgba(120, 160, 220, 0.18);
+  backdrop-filter: blur(8px);
+  color: #d7e0ee;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  pointer-events: none;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+
+.stats-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.stats-fps {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  color: #5ef08a;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-fps-unit {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #7f93b3;
+}
+
+.stats-gpu-name {
+  margin-left: auto;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: #8c9bb4;
+}
+
+.stats-graph {
+  display: block;
+  width: 150px;
+  height: 38px;
+  margin: 8px 0;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.stats-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.stats-rows > div {
+  display: flex;
+  justify-content: space-between;
+}
+
+.stats-rows .k {
+  color: #7f93b3;
+}
+
+.stats-rows .v {
+  color: #e6ecf6;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Determinate loading bar ------------------------------------------- */
+.loader {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 72vw);
+  padding: 10px 14px 12px;
+  border-radius: 12px;
+  background: rgba(14, 17, 24, 0.9);
+  border: 1px solid rgba(120, 160, 220, 0.2);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+
+.loader-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #9fb0cc;
+}
+
+.loader-pct {
+  color: #cfe0f5;
+  font-variant-numeric: tabular-nums;
+}
+
+.loader-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(120, 160, 220, 0.14);
+  overflow: hidden;
+}
+
+.loader-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #3a6ea5, #5ea0f0);
+  box-shadow: 0 0 12px rgba(94, 160, 240, 0.6);
+  transition: width 0.15s ease;
+}
+
+/* --- Intensity histogram + colorbar legend (bottom-center) ------------- */
+.intensity {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 9px 12px 8px;
+  border-radius: 12px;
+  background: rgba(14, 17, 24, 0.82);
+  border: 1px solid rgba(120, 160, 220, 0.18);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.intensity-title {
+  margin-bottom: 6px;
+  text-align: center;
+  letter-spacing: 0.4px;
+  font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #7f93b3;
+}
+
+.intensity-canvas {
+  display: block;
+  width: 264px;
+  height: 76px;
+}
+
+.intensity-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #cfe0f5;
+  font-variant-numeric: tabular-nums;
+}
+
+.intensity-labels .muted {
+  color: #7f93b3;
+}
+
+/* --- Drag & drop overlay ----------------------------------------------- */
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 12, 17, 0.7);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.drop-card {
+  padding: 22px 30px;
+  border-radius: 16px;
+  border: 2px dashed rgba(94, 160, 240, 0.7);
+  background: rgba(14, 17, 24, 0.85);
+  color: #e6ecf6;
+  font-size: 15px;
+}
+
+.drop-card b {
+  color: #8fc0ff;
+}
+
+/* --- MPR 2x2 overlay (labels + dividers) ------------------------------- */
+.mpr-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  pointer-events: none;
+}
+
+.mpr-cell {
+  position: relative;
+  border: 0 solid rgba(120, 160, 220, 0.3);
+}
+
+.mpr-cell.tl {
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+.mpr-cell.tr {
+  border-bottom-width: 1px;
+}
+.mpr-cell.bl {
+  border-right-width: 1px;
+}
+
+.mpr-label {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(14, 17, 24, 0.7);
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.3px;
+  color: #cfe0f5;
+}
+
+.mpr-ruler {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* --- Mobile / small screens -------------------------------------------- */
+@media (max-width: 700px) {
+  /* Header panel: compact, drop the heavy affine table + hint. */
+  .info {
+    top: 8px;
+    left: 8px;
+    width: min(52vw, 230px);
+    padding: 9px 11px;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+  .info h1 {
+    font-size: 12px;
+  }
+  .info .sub,
+  .info .affine,
+  .info .hint {
+    display: none;
+  }
+
+  /* Stats: compact, hide the sparkline. */
+  .stats {
+    left: 8px;
+    bottom: 8px;
+    width: 132px;
+    padding: 7px 9px;
+  }
+  .stats-fps {
+    font-size: 19px;
+  }
+  .stats-gpu-name {
+    max-width: 64px;
+  }
+  .stats-graph {
+    display: none;
+  }
+
+  /* The intensity histogram is an advanced panel — hide it on phones. */
+  .intensity {
+    display: none;
+  }
+
+  /* MPR labels a touch smaller so they don't crowd the small quadrants. */
+  .mpr-label {
+    font-size: 9px;
+    padding: 1px 5px;
+  }
+
+  .drop-card {
+    font-size: 13px;
+    padding: 16px 18px;
+  }
+}
+
+/* --- Phone: top bar (4 fullscreen view tabs) --------------------------- */
+.topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 44px;
+  z-index: 30;
+  display: flex;
+  gap: 4px;
+  padding: 5px 6px;
+  background: rgba(10, 12, 17, 0.86);
+  border-bottom: 1px solid rgba(120, 160, 220, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.topbar-tab {
+  flex: 1;
+  border: 1px solid rgba(120, 160, 220, 0.18);
+  border-radius: 9px;
+  background: rgba(20, 26, 36, 0.6);
+  color: #aab8d0;
+  font: 600 13px/1 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.topbar-tab.active {
+  background: linear-gradient(180deg, #3a6ea5, #2f5d8f);
+  border-color: rgba(120, 170, 240, 0.6);
+  color: #eaf2ff;
+  box-shadow: 0 2px 10px rgba(58, 110, 165, 0.45);
+}
+
+/* --- Phone: single-plane overlay (label + fullscreen ruler) ------------ */
+.single-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.single-label {
+  position: absolute;
+  top: 52px;
+  left: 10px;
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: rgba(14, 17, 24, 0.72);
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.3px;
+}
+
+.single-hint {
+  position: absolute;
+  bottom: 46px; /* a thin line just above the sheet peek; stats stacks above it */
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(14, 17, 24, 0.55);
+  color: #7f8ea6;
+  font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+}
+
+/* --- Phone: bottom sheet holding the Leva panel ------------------------ */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(6, 8, 12, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+
+.sheet-backdrop.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 41;
+  height: min(72vh, 560px);
+  display: flex;
+  flex-direction: column;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  background: rgba(13, 16, 23, 0.96);
+  border: 1px solid rgba(120, 160, 220, 0.2);
+  border-bottom: none;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.sheet.dragging {
+  transition: none;
+}
+
+.sheet-handle {
+  flex: 0 0 auto;
+  height: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sheet-grip {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(150, 170, 200, 0.5);
+}
+
+.sheet-title {
+  font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #6f819e;
+}
+
+.sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 8px 14px;
+}
+
+/* Leva fills the sheet body instead of floating as its own fixed panel. */
+.sheet-body > div {
+  width: 100% !important;
+}
+
+/* --- Phone (<=500px): keep overlays clear of the bar + sheet peek ------ */
+@media (max-width: 500px) {
+  .info {
+    top: 52px;
+  }
+  /* Sit above the sheet peek; on single-plane views, above the gesture hint too. */
+  .stats {
+    bottom: 72px;
+  }
+  .loader,
+  .status {
+    bottom: 56px;
+  }
+}
