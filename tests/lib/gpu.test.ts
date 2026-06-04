@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-// shortGpu / fpsColor currently live in StatsPanel.tsx; the refactor moves them
-// to src/lib/gpu.ts and this import path follows.
-import { fpsColor, shortGpu } from "../../src/StatsPanel";
+import { fpsColor, shortGpu } from "../../src/lib/gpu";
 
 describe("fpsColor", () => {
   it("is green at 55+, amber 30-54, red below 30", () => {

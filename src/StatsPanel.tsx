@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { fpsColor, shortGpu } from "./lib/gpu";
 import type { VolumeViewer } from "./rendering";
 
 /**
@@ -12,23 +13,6 @@ import type { VolumeViewer } from "./rendering";
 const GRAPH_W = 150;
 const GRAPH_H = 38;
 const MAX_FPS = 120;
-
-export function fpsColor(fps: number): string {
-  if (fps >= 55) return "#5ef08a";
-  if (fps >= 30) return "#f0d24e";
-  return "#f0644e";
-}
-
-export function shortGpu(name: string): string {
-  // "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, ...)" -> "Apple M1 Max"
-  const m = name.match(/ANGLE \(([^,]+),\s*([^,]+)/);
-  const raw = m ? m[2] : name;
-  const clean = raw
-    .replace(/\s*\(.*$/, "")
-    .replace(/^ANGLE.*Renderer:\s*/i, "")
-    .trim();
-  return clean.length > 30 ? `${clean.slice(0, 29)}…` : clean;
-}
 
 export function StatsPanel({ viewer }: { viewer: VolumeViewer }) {
   const fpsRef = useRef<HTMLSpanElement>(null);
