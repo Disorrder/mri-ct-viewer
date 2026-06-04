@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DATASETS } from "../config/datasets";
-import { loadNiftiFromUrl, type NiftiVolume, parseNifti } from "../nifti";
+import { loadDataset, loadDroppedFiles, progressLabel } from "../lib/loadVolume";
+import type { Volume } from "../volume";
 
 export interface LoadState {
   fraction: number;
@@ -8,14 +9,14 @@ export interface LoadState {
 }
 
 /**
- * Owns dataset loading: fetches + parses the selected dataset (cached after the
- * first load) with progress reporting, and exposes loadFile for drag-and-dropped
- * volumes. Calls onVolume with each parsed volume; surfaces progress + error for
- * the UI. The dataset fetch is cancellable so a quick dataset switch can't apply
- * a stale volume.
+ * Owns dataset loading: fetches + decodes the selected dataset (cached after the
+ * first load) with progress reporting, and exposes loadFiles for drag-and-dropped
+ * volumes — a single .nii/.dcm, or a folder of DICOM slices. Calls onVolume with
+ * each decoded volume; surfaces progress + error for the UI. The dataset fetch is
+ * cancellable so a quick dataset switch can't apply a stale volume.
  */
-export function useVolumeLoader(datasetKey: string, onVolume: (vol: NiftiVolume) => void) {
-  const cacheRef = useRef<Map<string, NiftiVolume>>(new Map());
+export function useVolumeLoader(datasetKey: string, onVolume: (vol: Volume) => void) {
+  const cacheRef = useRef<Map<string, Volume>>(new Map());
   const [progress, setProgress] = useState<LoadState | null>({ fraction: 0, label: "connecting" });
   const [error, setError] = useState<string | null>(null);
 
@@ -34,18 +35,9 @@ export function useVolumeLoader(datasetKey: string, onVolume: (vol: NiftiVolume)
       try {
         setError(null);
         setProgress({ fraction: 0, label: "connecting" });
-        const vol = await loadNiftiFromUrl(ds.url, (p) => {
+        const vol = await loadDataset(ds, (p) => {
           if (cancelled) return;
-          const mb = (b: number) => (b / 1048576).toFixed(1);
-          const label =
-            p.phase === "download"
-              ? p.total
-                ? `downloading  ${mb(p.loaded)} / ${mb(p.total)} MB`
-                : `downloading  ${mb(p.loaded)} MB`
-              : p.phase === "decompress"
-                ? "decompressing (gunzip)"
-                : "parsing header + voxels";
-          setProgress({ fraction: p.fraction, label });
+          setProgress({ fraction: p.fraction, label: progressLabel(ds, p) });
         });
         if (cancelled) return;
         cacheRef.current.set(datasetKey, vol);
@@ -67,27 +59,27 @@ export function useVolumeLoader(datasetKey: string, onVolume: (vol: NiftiVolume)
     };
   }, [datasetKey, onVolume]);
 
-  // Load a user-dropped .nii / .nii.gz (our parser already takes an ArrayBuffer).
-  const loadFile = useCallback(
-    async (file: File) => {
+  // Load user-dropped files: a single .nii/.nii.gz/.dcm, or a folder of DICOM slices.
+  const loadFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
+      const what = files.length > 1 ? `${files.length} DICOM slices` : files[0].name;
       try {
         setError(null);
-        setProgress({ fraction: 0.25, label: `reading ${file.name}` });
-        const buf = await file.arrayBuffer();
-        setProgress({ fraction: 0.6, label: `parsing ${file.name}` });
-        const vol = await parseNifti(buf);
+        setProgress({ fraction: 0.3, label: `reading ${what}` });
+        const vol = await loadDroppedFiles(files);
         setProgress({ fraction: 0.97, label: "building scene" });
         await new Promise((r) => requestAnimationFrame(r));
         onVolume(vol);
         setProgress({ fraction: 1, label: "ready" });
         setTimeout(() => setProgress(null), 280);
       } catch (e) {
-        setError(`${file.name}: ${e}`);
+        setError(`${what}: ${e}`);
         setProgress(null);
       }
     },
     [onVolume],
   );
 
-  return { progress, error, loadFile };
+  return { progress, error, loadFiles };
 }
