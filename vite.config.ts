@@ -44,4 +44,21 @@ function rawNiftiBytes(): Plugin {
 export default defineConfig({
   plugins: [react(), rawNiftiBytes()],
   server: { port: 5173, open: false },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split the heavy, rarely-changing libraries out of the app bundle so
+        // they cache independently: Three.js (by far the largest) on its own,
+        // the React/Leva runtime in a second vendor chunk, app code in a third.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("/three/")) return "three";
+          return "vendor";
+        },
+      },
+    },
+    // Three.js alone is ~600 kB minified — inherent to the library, not a
+    // regression. Lift the warning above it so it only fires on real bloat.
+    chunkSizeWarningLimit: 700,
+  },
 });
