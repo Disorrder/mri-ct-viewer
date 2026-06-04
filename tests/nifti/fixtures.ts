@@ -44,15 +44,32 @@ export interface NiftiSpec {
 
 function writeVoxel(dv: DataView, off: number, code: number, le: boolean, v: number): void {
   switch (code) {
-    case 2: dv.setUint8(off, v); break;
-    case 256: dv.setInt8(off, v); break;
-    case 4: dv.setInt16(off, v, le); break;
-    case 512: dv.setUint16(off, v, le); break;
-    case 8: dv.setInt32(off, v, le); break;
-    case 768: dv.setUint32(off, v, le); break;
-    case 16: dv.setFloat32(off, v, le); break;
-    case 64: dv.setFloat64(off, v, le); break;
-    default: throw new Error(`fixture cannot write datatype ${code}`);
+    case 2:
+      dv.setUint8(off, v);
+      break;
+    case 256:
+      dv.setInt8(off, v);
+      break;
+    case 4:
+      dv.setInt16(off, v, le);
+      break;
+    case 512:
+      dv.setUint16(off, v, le);
+      break;
+    case 8:
+      dv.setInt32(off, v, le);
+      break;
+    case 768:
+      dv.setUint32(off, v, le);
+      break;
+    case 16:
+      dv.setFloat32(off, v, le);
+      break;
+    case 64:
+      dv.setFloat64(off, v, le);
+      break;
+    default:
+      throw new Error(`fixture cannot write datatype ${code}`);
   }
 }
 

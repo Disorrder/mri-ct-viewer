@@ -147,7 +147,11 @@ body,
   border: 1px solid rgba(120, 160, 220, 0.18);
   backdrop-filter: blur(8px);
   color: #d7e0ee;
-  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    11px / 1.4 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   pointer-events: none;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
 }
@@ -230,7 +234,11 @@ body,
   display: flex;
   justify-content: space-between;
   margin-bottom: 7px;
-  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    11px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   color: #9fb0cc;
 }
 
@@ -273,7 +281,11 @@ body,
   margin-bottom: 6px;
   text-align: center;
   letter-spacing: 0.4px;
-  font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    10px / 1.2 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   color: #7f93b3;
 }
 
@@ -287,7 +299,11 @@ body,
   display: flex;
   justify-content: space-between;
   margin-top: 5px;
-  font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    10px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   color: #cfe0f5;
   font-variant-numeric: tabular-nums;
 }
@@ -356,7 +372,11 @@ body,
   padding: 2px 7px;
   border-radius: 6px;
   background: rgba(14, 17, 24, 0.7);
-  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    11px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   letter-spacing: 0.3px;
   color: #cfe0f5;
 }
@@ -445,7 +465,10 @@ body,
   border-radius: 9px;
   background: rgba(20, 26, 36, 0.6);
   color: #aab8d0;
-  font: 600 13px/1 ui-sans-serif, system-ui, sans-serif;
+  font:
+    600 13px / 1 ui-sans-serif,
+    system-ui,
+    sans-serif;
   letter-spacing: 0.2px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -473,7 +496,11 @@ body,
   padding: 3px 8px;
   border-radius: 7px;
   background: rgba(14, 17, 24, 0.72);
-  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    12px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   letter-spacing: 0.3px;
 }
 
@@ -486,7 +513,11 @@ body,
   border-radius: 999px;
   background: rgba(14, 17, 24, 0.55);
   color: #7f8ea6;
-  font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    10px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   white-space: nowrap;
 }
 
@@ -551,7 +582,11 @@ body,
 }
 
 .sheet-title {
-  font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    10px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   letter-spacing: 1.5px;
   text-transform: uppercase;
   color: #6f819e;

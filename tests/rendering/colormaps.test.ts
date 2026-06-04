@@ -65,8 +65,9 @@ describe("colormapRGB — parity with the GLSL source (anti-drift)", () => {
     // Extract the seven `const vec3 cN = vec3(...)` from the GLSL COMMON chunk
     // and evaluate the same Horner polynomial, so the duplicated coefficients in
     // glsl.ts and colormaps.ts cannot silently diverge.
-    const coeffs = [...COMMON.matchAll(/vec3\s+c(\d)\s*=\s*vec3\(([^)]+)\)/g)]
-      .map((m) => m[2].split(",").map((s) => Number.parseFloat(s.trim())));
+    const coeffs = [...COMMON.matchAll(/vec3\s+c(\d)\s*=\s*vec3\(([^)]+)\)/g)].map((m) =>
+      m[2].split(",").map((s) => Number.parseFloat(s.trim())),
+    );
     expect(coeffs).toHaveLength(7);
 
     const glslViridis = (x: number): [number, number, number] => {

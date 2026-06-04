@@ -77,7 +77,10 @@ describe("loadNiftiFromUrl", () => {
   });
 
   it("throws when the response is not ok", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 404 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("nope", { status: 404 })),
+    );
     await expect(loadNiftiFromUrl("/missing.nii")).rejects.toThrow(/Failed to fetch/);
   });
 });

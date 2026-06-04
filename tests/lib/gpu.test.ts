@@ -16,9 +16,9 @@ describe("fpsColor", () => {
 
 describe("shortGpu", () => {
   it("extracts the renderer from an ANGLE string", () => {
-    expect(
-      shortGpu("ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)"),
-    ).toBe("Apple M1 Max");
+    expect(shortGpu("ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)")).toBe(
+      "Apple M1 Max",
+    );
   });
 
   it("leaves a plain renderer name mostly intact, dropping trailing parens", () => {

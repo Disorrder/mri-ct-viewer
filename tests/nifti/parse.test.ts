@@ -57,9 +57,7 @@ describe("parseNifti — affine", () => {
       [0, 2, 0, 20],
       [0, 0, 3, 30],
     ];
-    const vol = await parseNifti(
-      makeNifti({ dim: [1, 1, 1], sformCode: 1, srow, voxels: [1] }),
-    );
+    const vol = await parseNifti(makeNifti({ dim: [1, 1, 1], sformCode: 1, srow, voxels: [1] }));
     expect(vol.header.affine).toEqual([
       [1, 0, 0, 10],
       [0, 2, 0, 20],
@@ -100,9 +98,7 @@ describe("parseNifti — affine", () => {
 
   it("falls back to a diagonal scale when no orientation code is set", async () => {
     // Spacing values chosen to be exactly representable as float32.
-    const vol = await parseNifti(
-      makeNifti({ dim: [1, 1, 1], pixdim: [1.5, 2.5, 4], voxels: [1] }),
-    );
+    const vol = await parseNifti(makeNifti({ dim: [1, 1, 1], pixdim: [1.5, 2.5, 4], voxels: [1] }));
     expect(vol.header.affine).toEqual([
       [1.5, 0, 0, 0],
       [0, 2.5, 0, 0],
@@ -175,9 +171,7 @@ describe("parseNifti — scaling, texture, histogram, window", () => {
   });
 
   it("quantizes voxels to a 0..255 R8 texture", async () => {
-    const vol = await parseNifti(
-      makeNifti({ dim: [2, 2, 1], voxels: [0, 0, 100, 200] }),
-    );
+    const vol = await parseNifti(makeNifti({ dim: [2, 2, 1], voxels: [0, 0, 100, 200] }));
     expect(vol.texture).toBeInstanceOf(Uint8Array);
     expect(vol.texture.length).toBe(4);
     // lo=0, hi=200, span=200 -> round(v/200*255)

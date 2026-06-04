@@ -19,9 +19,7 @@ describe("<IntensityPanel>", () => {
 
   it("re-renders without throwing when the window changes", async () => {
     const volume = await parseNifti(makeNifti({ dim: [2, 2, 1], voxels: [0, 50, 150, 255] }));
-    const { rerender } = render(
-      <IntensityPanel volume={volume} low={0} high={1} colormap={3} />,
-    );
+    const { rerender } = render(<IntensityPanel volume={volume} low={0} high={1} colormap={3} />);
     expect(() =>
       rerender(<IntensityPanel volume={volume} low={0.3} high={0.6} colormap={4} />),
     ).not.toThrow();

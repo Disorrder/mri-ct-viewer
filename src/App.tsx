@@ -1,6 +1,19 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import { button, folder, Leva, useControls } from "leva";
-import { PLANE_COLORS, VolumeViewer, type Layout, type SlicePick, type ViewerParams } from "./VolumeViewer";
+import {
+  PLANE_COLORS,
+  VolumeViewer,
+  type Layout,
+  type SlicePick,
+  type ViewerParams,
+} from "./VolumeViewer";
 import { loadNiftiFromUrl, parseNifti, type NiftiVolume } from "./nifti";
 import { COLORMAPS, SLAB_PROJECTIONS, TECHNIQUES } from "./glsl";
 import { StatsPanel } from "./StatsPanel";
@@ -16,7 +29,8 @@ const DATASETS: Record<string, { url: string; label: string }> = {
 /** The four fullscreen views the phone top bar switches between. */
 const SINGLE_PLANES = ["axial", "coronal", "sagittal"] as const;
 type SinglePlane = (typeof SINGLE_PLANES)[number];
-const isSinglePlane = (l: string): l is SinglePlane => (SINGLE_PLANES as readonly string[]).includes(l);
+const isSinglePlane = (l: string): l is SinglePlane =>
+  (SINGLE_PLANES as readonly string[]).includes(l);
 /** Any 2D slice layout — MPR grid or one fullscreen plane (slice controls + crosshair apply). */
 const isOrtho = (l: string) => l === "MPR" || isSinglePlane(l);
 const PHONE_TABS: { key: Layout; label: string }[] = [
@@ -53,108 +67,161 @@ export default function App() {
   );
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const [params, set, get] = useControls(() => ({
-    dataset: {
-      value: "chris_t1",
-      options: Object.fromEntries(
-        Object.entries(DATASETS).map(([k, v]) => [v.label, k]),
+  const [params, set, get] = useControls(
+    () => ({
+      dataset: {
+        value: "chris_t1",
+        options: Object.fromEntries(Object.entries(DATASETS).map(([k, v]) => [v.label, k])),
+      },
+      layout: {
+        value: "3D",
+        // On phones the top bar is the view switcher, so this control is hidden —
+        // but it still holds the value (single planes included) the rest of the UI reads.
+        options: isPhone ? ["3D", "axial", "coronal", "sagittal"] : ["3D", "MPR"],
+        render: () => !isPhone,
+      },
+      mode: {
+        value: "Volume",
+        options: ["Volume", "Slices"],
+        render: (get) => get("layout") === "3D",
+      },
+      // Volume controls (also drive the 3D quadrant in MPR). iso → Isosurface, density → DVR.
+      "3D render": folder(
+        {
+          technique: { value: "DVR", options: [...TECHNIQUES] },
+          steps: { value: 256, min: 32, max: 512, step: 32 },
+          iso: {
+            value: 0.32,
+            min: 0,
+            max: 1,
+            step: 0.01,
+            hint: "isosurface threshold",
+            render: (get) => get("3D render.technique") === "Isosurface",
+          },
+          density: {
+            value: 0.4,
+            min: 0.02,
+            max: 2,
+            step: 0.02,
+            hint: "DVR opacity",
+            render: (get) => get("3D render.technique") === "DVR",
+          },
+        },
+        {
+          render: (get) =>
+            get("layout") === "MPR" || (get("layout") === "3D" && get("mode") === "Volume"),
+        },
       ),
-    },
-    layout: {
-      value: "3D",
-      // On phones the top bar is the view switcher, so this control is hidden —
-      // but it still holds the value (single planes included) the rest of the UI reads.
-      options: isPhone ? ["3D", "axial", "coronal", "sagittal"] : ["3D", "MPR"],
-      render: () => !isPhone,
-    },
-    mode: { value: "Volume", options: ["Volume", "Slices"], render: (get) => get("layout") === "3D" },
-    // Volume controls (also drive the 3D quadrant in MPR). iso → Isosurface, density → DVR.
-    "3D render": folder(
-      {
-        technique: { value: "DVR", options: [...TECHNIQUES] },
-        steps: { value: 256, min: 32, max: 512, step: 32 },
-        iso: {
-          value: 0.32,
+      colormap: { value: "gray", options: [...COLORMAPS] },
+      "window / level": folder({
+        // A two-thumb interval slider: low/high in one range, like the clip ranges.
+        window: {
+          value: [0.1, 0.85] as [number, number],
           min: 0,
           max: 1,
-          step: 0.01,
-          hint: "isosurface threshold",
-          render: (get) => get("3D render.technique") === "Isosurface",
+          step: 0.005,
+          label: "range",
         },
-        density: {
-          value: 0.4,
-          min: 0.02,
-          max: 2,
-          step: 0.02,
-          hint: "DVR opacity",
-          render: (get) => get("3D render.technique") === "DVR",
-        },
-      },
-      { render: (get) => get("layout") === "MPR" || (get("layout") === "3D" && get("mode") === "Volume") },
-    ),
-    colormap: { value: "gray", options: [...COLORMAPS] },
-    "window / level": folder({
-      // A two-thumb interval slider: low/high in one range, like the clip ranges.
-      window: { value: [0.1, 0.85] as [number, number], min: 0, max: 1, step: 0.005, label: "range" },
-      "auto (data)": button(() => {
-        const v = volumeRef.current;
-        if (v) set({ window: [+v.suggestedWindow[0].toFixed(3), +v.suggestedWindow[1].toFixed(3)] });
+        "auto (data)": button(() => {
+          const v = volumeRef.current;
+          if (v)
+            set({ window: [+v.suggestedWindow[0].toFixed(3), +v.suggestedWindow[1].toFixed(3)] });
+        }),
+        "full range": button(() => set({ window: [0, 1] })),
+        "high contrast": button(() => set({ window: [0.2, 0.55] })),
       }),
-      "full range": button(() => set({ window: [0, 1] })),
-      "high contrast": button(() => set({ window: [0.2, 0.55] })),
-    }),
-    // Slices-only controls.
-    slices: folder(
-      {
-        sliceX: { value: 0.5, min: 0, max: 1, step: 0.004, label: "sagittal (X)" },
-        sliceY: { value: 0.5, min: 0, max: 1, step: 0.004, label: "coronal (Y)" },
-        sliceZ: { value: 0.5, min: 0, max: 1, step: 0.004, label: "axial (Z)" },
-        thickness: { value: 1, min: 1, max: 20, step: 0.5, label: "thickness (mm)", hint: "slab thickness" },
-        slabMode: {
-          value: "mean",
-          options: [...SLAB_PROJECTIONS],
-          label: "slab projection",
-          render: (get) => get("slices.thickness") > 1, // irrelevant at 1 voxel
+      // Slices-only controls.
+      slices: folder(
+        {
+          sliceX: { value: 0.5, min: 0, max: 1, step: 0.004, label: "sagittal (X)" },
+          sliceY: { value: 0.5, min: 0, max: 1, step: 0.004, label: "coronal (Y)" },
+          sliceZ: { value: 0.5, min: 0, max: 1, step: 0.004, label: "axial (Z)" },
+          thickness: {
+            value: 1,
+            min: 1,
+            max: 20,
+            step: 0.5,
+            label: "thickness (mm)",
+            hint: "slab thickness",
+          },
+          slabMode: {
+            value: "mean",
+            options: [...SLAB_PROJECTIONS],
+            label: "slab projection",
+            render: (get) => get("slices.thickness") > 1, // irrelevant at 1 voxel
+          },
+          showX: { value: true, label: "show sagittal", render: (get) => get("layout") === "3D" },
+          showY: { value: true, label: "show coronal", render: (get) => get("layout") === "3D" },
+          showZ: { value: true, label: "show axial", render: (get) => get("layout") === "3D" },
         },
-        showX: { value: true, label: "show sagittal", render: (get) => get("layout") === "3D" },
-        showY: { value: true, label: "show coronal", render: (get) => get("layout") === "3D" },
-        showZ: { value: true, label: "show axial", render: (get) => get("layout") === "3D" },
-      },
-      { render: (get) => isOrtho(get("layout")) || (get("layout") === "3D" && get("mode") === "Slices") },
-    ),
-    // Cut plane (Volume mode). Axis/position/flip appear only once enabled.
-    clip: folder(
-      {
-        clipEnabled: { value: false, label: "enable cut" },
-        // A two-thumb interval slider per axis -> a 3D crop box.
-        clipX: { value: [0.15, 0.85] as [number, number], min: 0, max: 1, step: 0.004, label: "X range", render: (get) => get("clip.clipEnabled") },
-        clipY: { value: [0.15, 0.85] as [number, number], min: 0, max: 1, step: 0.004, label: "Y range", render: (get) => get("clip.clipEnabled") },
-        clipZ: { value: [0.15, 0.85] as [number, number], min: 0, max: 1, step: 0.004, label: "Z range", render: (get) => get("clip.clipEnabled") },
-        clipInvert: { value: false, label: "invert (cut out)", render: (get) => get("clip.clipEnabled") },
-      },
-      { render: (get) => get("layout") === "MPR" || (get("layout") === "3D" && get("mode") === "Volume") },
-    ),
-    scene: folder({
-      autoRotate: false,
-      background: "#0a0c11",
-      "reset view": button(() => viewerRef.current?.resetView()),
-      screenshot: button(() => {
-        const url = viewerRef.current?.screenshot();
-        if (!url) return;
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "nifti-view.png";
-        a.click();
+        {
+          render: (get) =>
+            isOrtho(get("layout")) || (get("layout") === "3D" && get("mode") === "Slices"),
+        },
+      ),
+      // Cut plane (Volume mode). Axis/position/flip appear only once enabled.
+      clip: folder(
+        {
+          clipEnabled: { value: false, label: "enable cut" },
+          // A two-thumb interval slider per axis -> a 3D crop box.
+          clipX: {
+            value: [0.15, 0.85] as [number, number],
+            min: 0,
+            max: 1,
+            step: 0.004,
+            label: "X range",
+            render: (get) => get("clip.clipEnabled"),
+          },
+          clipY: {
+            value: [0.15, 0.85] as [number, number],
+            min: 0,
+            max: 1,
+            step: 0.004,
+            label: "Y range",
+            render: (get) => get("clip.clipEnabled"),
+          },
+          clipZ: {
+            value: [0.15, 0.85] as [number, number],
+            min: 0,
+            max: 1,
+            step: 0.004,
+            label: "Z range",
+            render: (get) => get("clip.clipEnabled"),
+          },
+          clipInvert: {
+            value: false,
+            label: "invert (cut out)",
+            render: (get) => get("clip.clipEnabled"),
+          },
+        },
+        {
+          render: (get) =>
+            get("layout") === "MPR" || (get("layout") === "3D" && get("mode") === "Volume"),
+        },
+      ),
+      scene: folder({
+        autoRotate: false,
+        background: "#0a0c11",
+        "reset view": button(() => viewerRef.current?.resetView()),
+        screenshot: button(() => {
+          const url = viewerRef.current?.screenshot();
+          if (!url) return;
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "nifti-view.png";
+          a.click();
+        }),
       }),
+      // Ruler toggle — applies to every 2D layout (MPR grid + single planes).
+      other: folder(
+        {
+          showRuler: { value: true, label: "rulers" },
+        },
+        { render: (get) => isOrtho(get("layout")) },
+      ),
     }),
-    // Ruler toggle — applies to every 2D layout (MPR grid + single planes).
-    other: folder(
-      {
-        showRuler: { value: true, label: "rulers" },
-      },
-      { render: (get) => isOrtho(get("layout")) },
-    ),
-  }), [isPhone]);
+    [isPhone],
+  );
 
   // Build the scene for a parsed volume + reset the window to its auto value.
   const applyVolume = useCallback(
@@ -316,7 +383,9 @@ export default function App() {
       ],
       clipInvert: params.clipInvert,
       thickness: params.thickness,
-      slabProjection: SLAB_PROJECTIONS.indexOf(params.slabMode as (typeof SLAB_PROJECTIONS)[number]),
+      slabProjection: SLAB_PROJECTIONS.indexOf(
+        params.slabMode as (typeof SLAB_PROJECTIONS)[number],
+      ),
       autoRotate: params.autoRotate,
       background: params.background,
     };
@@ -325,136 +394,128 @@ export default function App() {
 
   return (
     <>
-    {/* Desktop: the usual fixed Leva panel. Phones get it in the bottom sheet below. */}
-    {!isPhone && <Leva collapsed={isMobile} />}
-    <div
-      className="app"
-      onDragOver={(e) => {
-        e.preventDefault();
-        if (!dragActive) setDragActive(true);
-      }}
-      onDragLeave={(e) => {
-        e.preventDefault();
-        setDragActive(false);
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragActive(false);
-        const f = e.dataTransfer.files?.[0];
-        if (f) loadLocalFile(f);
-      }}
-    >
+      {/* Desktop: the usual fixed Leva panel. Phones get it in the bottom sheet below. */}
+      {!isPhone && <Leva collapsed={isMobile} />}
       <div
-        className="canvas-host"
-        ref={mountRef}
-        onPointerDown={(e) => {
-          if (!isOrtho(params.layout)) return;
-          const pick = viewerRef.current?.pickSlice(e.clientX, e.clientY);
-          if (pick) {
-            draggingRef.current = true;
-            dragStartRef.current = { x: e.clientX, y: e.clientY };
+        className="app"
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!dragActive) setDragActive(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setDragActive(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragActive(false);
+          const f = e.dataTransfer.files?.[0];
+          if (f) loadLocalFile(f);
+        }}
+      >
+        <div
+          className="canvas-host"
+          ref={mountRef}
+          onPointerDown={(e) => {
+            if (!isOrtho(params.layout)) return;
+            const pick = viewerRef.current?.pickSlice(e.clientX, e.clientY);
+            if (pick) {
+              draggingRef.current = true;
+              dragStartRef.current = { x: e.clientX, y: e.clientY };
+              lockAxisRef.current = null;
+              set(pick.updates);
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+                /* pointer capture is best-effort */
+              }
+            }
+          }}
+          onPointerMove={(e) => {
+            if (!draggingRef.current) return;
+            const pick = viewerRef.current?.pickSlice(e.clientX, e.clientY);
+            if (!pick) return;
+            if (e.shiftKey) {
+              // Shift locks the crosshair to one axis, picked by the dominant drag delta.
+              const start = dragStartRef.current;
+              if (lockAxisRef.current === null && start) {
+                const dx = Math.abs(e.clientX - start.x);
+                const dy = Math.abs(e.clientY - start.y);
+                if (Math.max(dx, dy) < 4) return; // wait until the direction is clear
+                lockAxisRef.current = dx >= dy ? "h" : "v";
+              }
+              const key = lockAxisRef.current === "v" ? pick.verticalKey : pick.horizontalKey;
+              const val = pick.updates[key];
+              if (val !== undefined) set({ [key]: val } as SlicePick["updates"]);
+            } else {
+              lockAxisRef.current = null; // Shift released → free movement again
+              set(pick.updates);
+            }
+          }}
+          onPointerUp={() => {
+            draggingRef.current = false;
+            dragStartRef.current = null;
             lockAxisRef.current = null;
-            set(pick.updates);
-            try {
-              e.currentTarget.setPointerCapture(e.pointerId);
-            } catch {
-              /* pointer capture is best-effort */
-            }
-          }
-        }}
-        onPointerMove={(e) => {
-          if (!draggingRef.current) return;
-          const pick = viewerRef.current?.pickSlice(e.clientX, e.clientY);
-          if (!pick) return;
-          if (e.shiftKey) {
-            // Shift locks the crosshair to one axis, picked by the dominant drag delta.
-            const start = dragStartRef.current;
-            if (lockAxisRef.current === null && start) {
-              const dx = Math.abs(e.clientX - start.x);
-              const dy = Math.abs(e.clientY - start.y);
-              if (Math.max(dx, dy) < 4) return; // wait until the direction is clear
-              lockAxisRef.current = dx >= dy ? "h" : "v";
-            }
-            const key = lockAxisRef.current === "v" ? pick.verticalKey : pick.horizontalKey;
-            const val = pick.updates[key];
-            if (val !== undefined) set({ [key]: val } as SlicePick["updates"]);
-          } else {
-            lockAxisRef.current = null; // Shift released → free movement again
-            set(pick.updates);
-          }
-        }}
-        onPointerUp={() => {
-          draggingRef.current = false;
-          dragStartRef.current = null;
-          lockAxisRef.current = null;
-        }}
-        onPointerCancel={() => {
-          draggingRef.current = false;
-          dragStartRef.current = null;
-          lockAxisRef.current = null;
-        }}
-      />
-      {isPhone && (
-        <MobileTopBar active={params.layout} onSelect={(v) => set({ layout: v })} />
-      )}
-      {volume && params.layout === "3D" && <InfoPanel volume={volume} mode={params.mode} />}
-      {volume && viewer && params.layout === "MPR" && (
-        <MprOverlay
-          viewer={viewer}
-          volume={volume}
-          sliceX={params.sliceX}
-          sliceY={params.sliceY}
-          sliceZ={params.sliceZ}
-          showRuler={params.showRuler}
+          }}
+          onPointerCancel={() => {
+            draggingRef.current = false;
+            dragStartRef.current = null;
+            lockAxisRef.current = null;
+          }}
         />
-      )}
-      {volume && viewer && isSinglePlane(params.layout) && (
-        <SinglePlaneOverlay
-          viewer={viewer}
-          volume={volume}
-          plane={params.layout}
-          sliceX={params.sliceX}
-          sliceY={params.sliceY}
-          sliceZ={params.sliceZ}
-          showRuler={params.showRuler}
-        />
-      )}
-      {viewer && <StatsPanel viewer={viewer} />}
-      {volume && !progress && params.layout === "3D" && (
-        <IntensityPanel
-          volume={volume}
-          low={(params.window as number[])[0]}
-          high={(params.window as number[])[1]}
-          colormap={COLORMAPS.indexOf(params.colormap as (typeof COLORMAPS)[number])}
-        />
-      )}
-      {progress && <LoadBar fraction={progress.fraction} label={progress.label} />}
-      {error && <div className="status error">{error}</div>}
-      {dragActive && (
-        <div className="drop-overlay">
-          <div className="drop-card">
-            Drop a <b>.nii</b> / <b>.nii.gz</b> file to load it
+        {isPhone && <MobileTopBar active={params.layout} onSelect={(v) => set({ layout: v })} />}
+        {volume && params.layout === "3D" && <InfoPanel volume={volume} mode={params.mode} />}
+        {volume && viewer && params.layout === "MPR" && (
+          <MprOverlay
+            viewer={viewer}
+            volume={volume}
+            sliceX={params.sliceX}
+            sliceY={params.sliceY}
+            sliceZ={params.sliceZ}
+            showRuler={params.showRuler}
+          />
+        )}
+        {volume && viewer && isSinglePlane(params.layout) && (
+          <SinglePlaneOverlay
+            viewer={viewer}
+            volume={volume}
+            plane={params.layout}
+            sliceX={params.sliceX}
+            sliceY={params.sliceY}
+            sliceZ={params.sliceZ}
+            showRuler={params.showRuler}
+          />
+        )}
+        {viewer && <StatsPanel viewer={viewer} />}
+        {volume && !progress && params.layout === "3D" && (
+          <IntensityPanel
+            volume={volume}
+            low={(params.window as number[])[0]}
+            high={(params.window as number[])[1]}
+            colormap={COLORMAPS.indexOf(params.colormap as (typeof COLORMAPS)[number])}
+          />
+        )}
+        {progress && <LoadBar fraction={progress.fraction} label={progress.label} />}
+        {error && <div className="status error">{error}</div>}
+        {dragActive && (
+          <div className="drop-overlay">
+            <div className="drop-card">
+              Drop a <b>.nii</b> / <b>.nii.gz</b> file to load it
+            </div>
           </div>
-        </div>
-      )}
-      {isPhone && (
-        <BottomSheet open={sheetOpen} onOpenChange={setSheetOpen}>
-          <Leva fill flat titleBar={false} />
-        </BottomSheet>
-      )}
-    </div>
+        )}
+        {isPhone && (
+          <BottomSheet open={sheetOpen} onOpenChange={setSheetOpen}>
+            <Leva fill flat titleBar={false} />
+          </BottomSheet>
+        )}
+      </div>
     </>
   );
 }
 
 /** Phone-only top bar: switch between the four fullscreen views. */
-function MobileTopBar({
-  active,
-  onSelect,
-}: {
-  active: string;
-  onSelect: (v: Layout) => void;
-}) {
+function MobileTopBar({ active, onSelect }: { active: string; onSelect: (v: Layout) => void }) {
   return (
     <div className="topbar">
       {PHONE_TABS.map((t) => (
@@ -489,7 +550,13 @@ function BottomSheet({
   const sheetRef = useRef<HTMLDivElement>(null);
   // `last`/`moved` live in the ref so endDrag sees the final position synchronously
   // (state is async) and can tell a tap from a swipe without a separate click handler.
-  const dragRef = useRef<{ startY: number; height: number; base: number; last: number; moved: boolean } | null>(null);
+  const dragRef = useRef<{
+    startY: number;
+    height: number;
+    base: number;
+    last: number;
+    moved: boolean;
+  } | null>(null);
   const [dragY, setDragY] = useState<number | null>(null); // live translateY (px) during a drag
   const TAP_SLOP = 6; // movement under this is a tap, not a drag
 
@@ -518,7 +585,8 @@ function BottomSheet({
     const max = Math.max(0, d.height - SHEET_PEEK);
     dragRef.current = null;
     setDragY(null);
-    if (!d.moved) onOpenChange(!open); // a tap toggles
+    if (!d.moved)
+      onOpenChange(!open); // a tap toggles
     else onOpenChange(d.last < max / 2); // a swipe snaps by where it ended up
   };
 
@@ -697,9 +765,18 @@ function SinglePlaneOverlay({
   }, [viewer]);
 
   const meta = {
-    axial: { color: PLANE_COLORS.axial, label: `Axial · z ${idx(sliceZ, volume.nz)} / ${volume.nz - 1}` },
-    coronal: { color: PLANE_COLORS.coronal, label: `Coronal · y ${idx(sliceY, volume.ny)} / ${volume.ny - 1}` },
-    sagittal: { color: PLANE_COLORS.sagittal, label: `Sagittal · x ${idx(sliceX, volume.nx)} / ${volume.nx - 1}` },
+    axial: {
+      color: PLANE_COLORS.axial,
+      label: `Axial · z ${idx(sliceZ, volume.nz)} / ${volume.nz - 1}`,
+    },
+    coronal: {
+      color: PLANE_COLORS.coronal,
+      label: `Coronal · y ${idx(sliceY, volume.ny)} / ${volume.ny - 1}`,
+    },
+    sagittal: {
+      color: PLANE_COLORS.sagittal,
+      label: `Sagittal · x ${idx(sliceX, volume.nx)} / ${volume.nx - 1}`,
+    },
   }[plane];
 
   return (
@@ -851,7 +928,8 @@ function LoadBar({ fraction, label }: { fraction: number; label: string }) {
 
 function InfoPanel({ volume, mode }: { volume: NiftiVolume; mode: string }) {
   const h = volume.header;
-  const fmt = (n: number) => (Math.abs(n) >= 1000 || (n !== 0 && Math.abs(n) < 0.01) ? n.toExponential(2) : +n.toFixed(3));
+  const fmt = (n: number) =>
+    Math.abs(n) >= 1000 || (n !== 0 && Math.abs(n) < 0.01) ? n.toExponential(2) : +n.toFixed(3);
   return (
     <div className="info">
       <h1>NIfTI-1 header</h1>
@@ -862,7 +940,10 @@ function InfoPanel({ volume, mode }: { volume: NiftiVolume; mode: string }) {
         <Row k="magic" v={`"${h.magic}"  (single-file .nii)`} />
         <Row k="dimensions" v={`${volume.nx} × ${volume.ny} × ${volume.nz} voxels`} />
         <Row k="datatype" v={`${h.datatype} (${h.bitpix}-bit), code ${h.datatypeCode}`} />
-        <Row k="voxel spacing" v={`${fmt(h.pixdim[1])} × ${fmt(h.pixdim[2])} × ${fmt(h.pixdim[3])} ${h.xyzUnits}`} />
+        <Row
+          k="voxel spacing"
+          v={`${fmt(h.pixdim[1])} × ${fmt(h.pixdim[2])} × ${fmt(h.pixdim[3])} ${h.xyzUnits}`}
+        />
         <Row k="scl_slope / inter" v={`${fmt(h.sclSlope)} / ${fmt(h.sclInter)}`} />
         <Row k="display range" v={`${fmt(volume.displayMin)} … ${fmt(volume.displayMax)}`} />
         <Row k="vox_offset" v={`${h.voxOffset} bytes`} />

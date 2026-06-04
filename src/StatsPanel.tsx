@@ -23,7 +23,10 @@ export function shortGpu(name: string): string {
   // "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, ...)" -> "Apple M1 Max"
   const m = name.match(/ANGLE \(([^,]+),\s*([^,]+)/);
   const raw = m ? m[2] : name;
-  const clean = raw.replace(/\s*\(.*$/, "").replace(/^ANGLE.*Renderer:\s*/i, "").trim();
+  const clean = raw
+    .replace(/\s*\(.*$/, "")
+    .replace(/^ANGLE.*Renderer:\s*/i, "")
+    .trim();
   return clean.length > 30 ? clean.slice(0, 29) + "…" : clean;
 }
 
@@ -87,9 +90,7 @@ export function StatsPanel({ viewer }: { viewer: VolumeViewer }) {
             : "n/a";
         if (ramRef.current)
           ramRef.current.textContent =
-            s.jsHeapMB > 0
-              ? `${s.jsHeapMB.toFixed(0)} / ${s.jsHeapLimitMB.toFixed(0)} MB`
-              : "n/a";
+            s.jsHeapMB > 0 ? `${s.jsHeapMB.toFixed(0)} / ${s.jsHeapLimitMB.toFixed(0)} MB` : "n/a";
         if (drawRef.current)
           drawRef.current.textContent = `${s.drawCalls} · ${(s.triangles / 1000).toFixed(1)}k△`;
       }
@@ -101,7 +102,9 @@ export function StatsPanel({ viewer }: { viewer: VolumeViewer }) {
   return (
     <div className="stats">
       <div className="stats-top">
-        <span className="stats-fps" ref={fpsRef}>–</span>
+        <span className="stats-fps" ref={fpsRef}>
+          –
+        </span>
         <span className="stats-fps-unit">FPS</span>
         <span className="stats-gpu-name" title={viewer.gpuName}>
           {shortGpu(viewer.gpuName)}
@@ -109,10 +112,30 @@ export function StatsPanel({ viewer }: { viewer: VolumeViewer }) {
       </div>
       <canvas className="stats-graph" ref={canvasRef} />
       <div className="stats-rows">
-        <div><span className="k">CPU</span><span className="v" ref={cpuRef}>–</span></div>
-        <div><span className="k">GPU</span><span className="v" ref={gpuRef}>–</span></div>
-        <div><span className="k">RAM</span><span className="v" ref={ramRef}>–</span></div>
-        <div><span className="k">draws</span><span className="v" ref={drawRef}>–</span></div>
+        <div>
+          <span className="k">CPU</span>
+          <span className="v" ref={cpuRef}>
+            –
+          </span>
+        </div>
+        <div>
+          <span className="k">GPU</span>
+          <span className="v" ref={gpuRef}>
+            –
+          </span>
+        </div>
+        <div>
+          <span className="k">RAM</span>
+          <span className="v" ref={ramRef}>
+            –
+          </span>
+        </div>
+        <div>
+          <span className="k">draws</span>
+          <span className="v" ref={drawRef}>
+            –
+          </span>
+        </div>
       </div>
     </div>
   );

@@ -14,12 +14,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { NiftiVolume } from "./nifti";
-import {
-  VOLUME_VERT,
-  VOLUME_FRAG,
-  SLICE_VERT,
-  SLICE_FRAG,
-} from "./glsl";
+import { VOLUME_VERT, VOLUME_FRAG, SLICE_VERT, SLICE_FRAG } from "./glsl";
 
 // Render layers — in the MPR layout each viewport's camera sees only what it
 // should. slicePlanes/crosshairs are ordered [sagittal, coronal, axial].
@@ -34,11 +29,20 @@ const C_SAGITTAL = 0xff5a3c;
 
 // --- Orientation cube (ViewCube) ---
 const GIZMO_PX = 128; // on-screen size of the corner cube
-const RAS_PAIRS: ReadonlyArray<readonly [string, string]> = [["R", "L"], ["A", "P"], ["S", "I"]];
+const RAS_PAIRS: ReadonlyArray<readonly [string, string]> = [
+  ["R", "L"],
+  ["A", "P"],
+  ["S", "I"],
+];
 
 // Full-word labels for the six anatomical faces (the cube shows words, not single letters).
 const ANATOMY_WORDS: Record<string, string> = {
-  R: "RIGHT", L: "LEFT", A: "ANTERIOR", P: "POSTERIOR", S: "SUPERIOR", I: "INFERIOR",
+  R: "RIGHT",
+  L: "LEFT",
+  A: "ANTERIOR",
+  P: "POSTERIOR",
+  S: "SUPERIOR",
+  I: "INFERIOR",
 };
 // ViewCube palette: faces light, bevels (cut corners/edges) a touch darker, blue on hover.
 const GIZMO_FACE = new THREE.Color(0xd0d3d9);
@@ -87,8 +91,12 @@ function makeLabelTexture(text: string): THREE.CanvasTexture {
 
 /** Outward geometric normal of triangle (a,b,c). */
 export function triNormal(a: number[], b: number[], c: number[]): number[] {
-  const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
-  const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+  const ux = b[0] - a[0],
+    uy = b[1] - a[1],
+    uz = b[2] - a[2];
+  const vx = c[0] - a[0],
+    vy = c[1] - a[1],
+    vz = c[2] - a[2];
   return [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
 }
 
@@ -113,7 +121,13 @@ export function buildViewCubeGeometry(
 
   const facet = (verts: number[][], out: number[], kind: "face" | "bevel") => {
     const start = vAt;
-    const tris = verts.length === 3 ? [[0, 1, 2]] : [[0, 1, 2], [0, 2, 3]];
+    const tris =
+      verts.length === 3
+        ? [[0, 1, 2]]
+        : [
+            [0, 1, 2],
+            [0, 2, 3],
+          ];
     for (const [i, j, k] of tris) {
       let [p0, p1, p2] = [verts[i], verts[j], verts[k]];
       const n = triNormal(p0, p1, p2);
@@ -129,9 +143,19 @@ export function buildViewCubeGeometry(
   for (let a = 0; a < 3; a++) {
     for (const s of [1, -1]) {
       const [b, c] = [0, 1, 2].filter((x) => x !== a);
-      const out = [0, 0, 0]; out[a] = s;
-      const verts = [[-G, -G], [G, -G], [G, G], [-G, G]].map(([vb, vc]) => {
-        const p = [0, 0, 0]; p[a] = s * H; p[b] = vb; p[c] = vc; return p;
+      const out = [0, 0, 0];
+      out[a] = s;
+      const verts = [
+        [-G, -G],
+        [G, -G],
+        [G, G],
+        [-G, G],
+      ].map(([vb, vc]) => {
+        const p = [0, 0, 0];
+        p[a] = s * H;
+        p[b] = vb;
+        p[c] = vc;
+        return p;
       });
       facet(verts, out, "face");
     }
@@ -143,11 +167,26 @@ export function buildViewCubeGeometry(
       const c = 3 - a - b;
       for (const sa of [1, -1]) {
         for (const sb of [1, -1]) {
-          const out = [0, 0, 0]; out[a] = sa; out[b] = sb;
+          const out = [0, 0, 0];
+          out[a] = sa;
+          out[b] = sb;
           const mk = (va: number, vb: number, vc: number) => {
-            const p = [0, 0, 0]; p[a] = va; p[b] = vb; p[c] = vc; return p;
+            const p = [0, 0, 0];
+            p[a] = va;
+            p[b] = vb;
+            p[c] = vc;
+            return p;
           };
-          facet([mk(sa * H, sb * G, -G), mk(sa * H, sb * G, G), mk(sa * G, sb * H, G), mk(sa * G, sb * H, -G)], out, "bevel");
+          facet(
+            [
+              mk(sa * H, sb * G, -G),
+              mk(sa * H, sb * G, G),
+              mk(sa * G, sb * H, G),
+              mk(sa * G, sb * H, -G),
+            ],
+            out,
+            "bevel",
+          );
         }
       }
     }
@@ -157,7 +196,15 @@ export function buildViewCubeGeometry(
   for (const sx of [1, -1]) {
     for (const sy of [1, -1]) {
       for (const sz of [1, -1]) {
-        facet([[sx * H, sy * G, sz * G], [sx * G, sy * H, sz * G], [sx * G, sy * G, sz * H]], [sx, sy, sz], "bevel");
+        facet(
+          [
+            [sx * H, sy * G, sz * G],
+            [sx * G, sy * H, sz * G],
+            [sx * G, sy * G, sz * H],
+          ],
+          [sx, sy, sz],
+          "bevel",
+        );
       }
     }
   }
@@ -169,7 +216,10 @@ export function buildViewCubeGeometry(
 /** Orient a label plane so its +Z faces `normal` and its +Y aligns with `up`. */
 function orientGizmoLabel(plane: THREE.Object3D, normal: THREE.Vector3, up: THREE.Vector3) {
   const f = normal.clone().normalize();
-  const u = up.clone().sub(f.clone().multiplyScalar(up.dot(f))).normalize();
+  const u = up
+    .clone()
+    .sub(f.clone().multiplyScalar(up.dot(f)))
+    .normalize();
   const r = new THREE.Vector3().crossVectors(u, f).normalize();
   plane.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(r, u, f));
 }
@@ -293,7 +343,10 @@ export class VolumeViewer {
 
     // Orientation cube (bottom-right corner) takes priority in both layouts.
     if (x >= rect.width - GIZMO_PX && y >= rect.height - GIZMO_PX) {
-      const hit = this.raycastGizmo((x - (rect.width - GIZMO_PX)) / GIZMO_PX, (y - (rect.height - GIZMO_PX)) / GIZMO_PX);
+      const hit = this.raycastGizmo(
+        (x - (rect.width - GIZMO_PX)) / GIZMO_PX,
+        (y - (rect.height - GIZMO_PX)) / GIZMO_PX,
+      );
       if (hit?.face) {
         e.stopPropagation();
         this.snapToFace(hit.face.normal.clone()); // face axis or corner/edge diagonal
@@ -320,7 +373,10 @@ export class VolumeViewer {
     const y = e.clientY - rect.top;
     let group = -1;
     if (x >= rect.width - GIZMO_PX && y >= rect.height - GIZMO_PX) {
-      const hit = this.raycastGizmo((x - (rect.width - GIZMO_PX)) / GIZMO_PX, (y - (rect.height - GIZMO_PX)) / GIZMO_PX);
+      const hit = this.raycastGizmo(
+        (x - (rect.width - GIZMO_PX)) / GIZMO_PX,
+        (y - (rect.height - GIZMO_PX)) / GIZMO_PX,
+      );
       if (hit?.face) group = hit.face.materialIndex ?? -1;
     }
     this.hoveredGroup = group;
@@ -386,7 +442,11 @@ export class VolumeViewer {
     this.gpuTimingSupported = this.timerExt !== null;
     const dbg = this.gl.getExtension("WEBGL_debug_renderer_info");
     this.gpuName = dbg
-      ? String(this.gl.getParameter((dbg as { UNMASKED_RENDERER_WEBGL: number }).UNMASKED_RENDERER_WEBGL))
+      ? String(
+          this.gl.getParameter(
+            (dbg as { UNMASKED_RENDERER_WEBGL: number }).UNMASKED_RENDERER_WEBGL,
+          ),
+        )
       : "WebGL2 device";
 
     this.camera = new THREE.PerspectiveCamera(
@@ -406,7 +466,10 @@ export class VolumeViewer {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.container.addEventListener("pointerdown", this.onPointerDownCapture, true);
-    this.container.addEventListener("wheel", this.onWheelCapture, { capture: true, passive: false });
+    this.container.addEventListener("wheel", this.onWheelCapture, {
+      capture: true,
+      passive: false,
+    });
     this.container.addEventListener("pointermove", this.onPointerMove);
     this.container.addEventListener("pointerleave", this.onPointerLeave);
 
@@ -592,7 +655,9 @@ export class VolumeViewer {
     ];
     // Each line is colored by the plane it represents (a line along axis A in a
     // view shows the plane normal to the other in-plane axis B).
-    const G = new THREE.Color(C_AXIAL), Y = new THREE.Color(C_CORONAL), R = new THREE.Color(C_SAGITTAL);
+    const G = new THREE.Color(C_AXIAL),
+      Y = new THREE.Color(C_CORONAL),
+      R = new THREE.Color(C_SAGITTAL);
     const crossCol = [
       [G, G, Y, Y], // sagittal view: Y-line→axial, Z-line→coronal
       [G, G, R, R], // coronal view:  X-line→axial, Z-line→sagittal
@@ -660,12 +725,14 @@ export class VolumeViewer {
   /** (Re)build the orientation cube (chamfered ViewCube) with the 6 face labels. */
   private buildGizmo(labels: string[]) {
     this.disposeGizmoCube();
-    const H = 0.62, G = 0.4; // face plane distance / face half-width (the gap is the bevel)
+    const H = 0.62,
+      G = 0.4; // face plane distance / face half-width (the gap is the bevel)
     const { geometry, kinds } = buildViewCubeGeometry(H, G);
 
     // One material per facet so each can highlight independently on hover.
     const mats = kinds.map(
-      (k) => new THREE.MeshBasicMaterial({ color: (k === "face" ? GIZMO_FACE : GIZMO_BEVEL).clone() }),
+      (k) =>
+        new THREE.MeshBasicMaterial({ color: (k === "face" ? GIZMO_FACE : GIZMO_BEVEL).clone() }),
     );
     const cube = new THREE.Mesh(geometry, mats);
     cube.add(
@@ -680,9 +747,12 @@ export class VolumeViewer {
     const Z = new THREE.Vector3(0, 0, 1);
     const Y = new THREE.Vector3(0, 1, 0);
     const faces: ReadonlyArray<readonly [THREE.Vector3, THREE.Vector3]> = [
-      [new THREE.Vector3(1, 0, 0), Z], [new THREE.Vector3(-1, 0, 0), Z],
-      [new THREE.Vector3(0, 1, 0), Z], [new THREE.Vector3(0, -1, 0), Z],
-      [new THREE.Vector3(0, 0, 1), Y], [new THREE.Vector3(0, 0, -1), Y],
+      [new THREE.Vector3(1, 0, 0), Z],
+      [new THREE.Vector3(-1, 0, 0), Z],
+      [new THREE.Vector3(0, 1, 0), Z],
+      [new THREE.Vector3(0, -1, 0), Z],
+      [new THREE.Vector3(0, 0, 1), Y],
+      [new THREE.Vector3(0, 0, -1), Y],
     ];
     const labelMeshes = faces.map(([normal, up], i) => {
       const mat = new THREE.MeshBasicMaterial({
@@ -865,7 +935,11 @@ export class VolumeViewer {
     // Crop-box outline: span [cmin, cmax] in object space (tc -> (t-0.5)*boxSize).
     if (this.clipBox) {
       this.clipBox.visible = p.clipEnabled;
-      this.clipBox.scale.set((cmax.x - cmin.x) * bx, (cmax.y - cmin.y) * by, (cmax.z - cmin.z) * bz);
+      this.clipBox.scale.set(
+        (cmax.x - cmin.x) * bx,
+        (cmax.y - cmin.y) * by,
+        (cmax.z - cmin.z) * bz,
+      );
       this.clipBox.position.set(
         ((cmin.x + cmax.x) / 2 - 0.5) * bx,
         ((cmin.y + cmax.y) / 2 - 0.5) * by,
@@ -925,11 +999,20 @@ export class VolumeViewer {
     let qx: number, qy: number;
     let kind: "ax" | "cor" | "sag";
     if (x < hw && y < hh) {
-      cam = this.camCoronal; qx = 0; qy = 0; kind = "cor";
+      cam = this.camCoronal;
+      qx = 0;
+      qy = 0;
+      kind = "cor";
     } else if (x >= hw && y < hh) {
-      cam = this.camSagittal; qx = hw; qy = 0; kind = "sag";
+      cam = this.camSagittal;
+      qx = hw;
+      qy = 0;
+      kind = "sag";
     } else if (x < hw && y >= hh) {
-      cam = this.camAxial; qx = 0; qy = hh; kind = "ax";
+      cam = this.camAxial;
+      qx = 0;
+      qy = hh;
+      kind = "ax";
     } else {
       return null; // 3D quadrant
     }
@@ -1073,9 +1156,11 @@ export class VolumeViewer {
     this.stats.textures = info.memory.textures;
     this.stats.geometries = info.memory.geometries;
     this.stats.programs = info.programs ? info.programs.length : 0;
-    const mem = (performance as unknown as {
-      memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number };
-    }).memory;
+    const mem = (
+      performance as unknown as {
+        memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number };
+      }
+    ).memory;
     if (mem) {
       this.stats.jsHeapMB = mem.usedJSHeapSize / 1048576;
       this.stats.jsHeapLimitMB = mem.jsHeapSizeLimit / 1048576;
@@ -1114,7 +1199,9 @@ export class VolumeViewer {
   dispose() {
     cancelAnimationFrame(this.raf);
     this.container.removeEventListener("pointerdown", this.onPointerDownCapture, true);
-    this.container.removeEventListener("wheel", this.onWheelCapture, { capture: true } as EventListenerOptions);
+    this.container.removeEventListener("wheel", this.onWheelCapture, {
+      capture: true,
+    } as EventListenerOptions);
     this.container.removeEventListener("pointermove", this.onPointerMove);
     this.container.removeEventListener("pointerleave", this.onPointerLeave);
     if (this.gpuQuery) this.gl.deleteQuery(this.gpuQuery);

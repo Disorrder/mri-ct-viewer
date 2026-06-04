@@ -129,9 +129,13 @@ function parseHeader(buf: ArrayBuffer): NiftiHeader {
     ];
   } else if (qformCode > 0) {
     // Method 2: orientation encoded as a unit quaternion (b,c,d; a derived).
-    const b = f32(256), c = f32(260), d = f32(264);
+    const b = f32(256),
+      c = f32(260),
+      d = f32(264);
     const a = Math.sqrt(Math.max(0, 1 - (b * b + c * c + d * d)));
-    const qx = f32(268), qy = f32(272), qz = f32(276);
+    const qx = f32(268),
+      qy = f32(272),
+      qz = f32(276);
     const qfac = pixdim[0] < 0 ? -1 : 1; // pixdim[0] stores the handedness flag
     const [dx, dy, dz] = [pixdim[1], pixdim[2], pixdim[3]];
     const R = [
@@ -184,15 +188,32 @@ function readVoxels(buf: ArrayBuffer, h: NiftiHeader, n: number): Float64Array {
   const out = new Float64Array(n);
   const le = h.littleEndian;
   switch (h.datatypeCode) {
-    case 2: for (let i = 0; i < n; i++) out[i] = dv.getUint8(i); break;
-    case 256: for (let i = 0; i < n; i++) out[i] = dv.getInt8(i); break;
-    case 4: for (let i = 0; i < n; i++) out[i] = dv.getInt16(i * 2, le); break;
-    case 512: for (let i = 0; i < n; i++) out[i] = dv.getUint16(i * 2, le); break;
-    case 8: for (let i = 0; i < n; i++) out[i] = dv.getInt32(i * 4, le); break;
-    case 768: for (let i = 0; i < n; i++) out[i] = dv.getUint32(i * 4, le); break;
-    case 16: for (let i = 0; i < n; i++) out[i] = dv.getFloat32(i * 4, le); break;
-    case 64: for (let i = 0; i < n; i++) out[i] = dv.getFloat64(i * 8, le); break;
-    default: throw new Error(`Unsupported datatype code ${h.datatypeCode}`);
+    case 2:
+      for (let i = 0; i < n; i++) out[i] = dv.getUint8(i);
+      break;
+    case 256:
+      for (let i = 0; i < n; i++) out[i] = dv.getInt8(i);
+      break;
+    case 4:
+      for (let i = 0; i < n; i++) out[i] = dv.getInt16(i * 2, le);
+      break;
+    case 512:
+      for (let i = 0; i < n; i++) out[i] = dv.getUint16(i * 2, le);
+      break;
+    case 8:
+      for (let i = 0; i < n; i++) out[i] = dv.getInt32(i * 4, le);
+      break;
+    case 768:
+      for (let i = 0; i < n; i++) out[i] = dv.getUint32(i * 4, le);
+      break;
+    case 16:
+      for (let i = 0; i < n; i++) out[i] = dv.getFloat32(i * 4, le);
+      break;
+    case 64:
+      for (let i = 0; i < n; i++) out[i] = dv.getFloat64(i * 8, le);
+      break;
+    default:
+      throw new Error(`Unsupported datatype code ${h.datatypeCode}`);
   }
   return out;
 }
@@ -216,7 +237,8 @@ function parseDecompressed(buf: ArrayBuffer): NiftiVolume {
   // --- Find min/max of display values (raw * slope + inter).
   const slope = header.sclSlope === 0 ? 1 : header.sclSlope;
   const inter = header.sclInter;
-  let lo = Infinity, hi = -Infinity;
+  let lo = Infinity,
+    hi = -Infinity;
   for (let i = 0; i < n; i++) {
     const v = raw[i];
     if (v < lo) lo = v;
@@ -235,7 +257,9 @@ function parseDecompressed(buf: ArrayBuffer): NiftiVolume {
 
   // --- Auto window: 1st..99th percentile of voxels (ignoring the empty-air bin 0).
   const total = n - hist[0];
-  let acc = 0, p1 = 0, p99 = 255;
+  let acc = 0,
+    p1 = 0,
+    p99 = 255;
   for (let b = 1; b < 256; b++) {
     acc += hist[b];
     if (acc <= 0.02 * total) p1 = b;
