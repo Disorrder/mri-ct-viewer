@@ -49,10 +49,20 @@ export default defineConfig({
       output: {
         // Split the heavy, rarely-changing libraries out of the app bundle so
         // they cache independently: Three.js (by far the largest) on its own,
-        // the React/Leva runtime in a second vendor chunk, app code in a third.
+        // the Leva control panel and its subtree (~175 kB: @radix-ui, @stitches,
+        // zustand, react-colorful, react-dropzone, …) on its own, the React
+        // runtime in a third vendor chunk, app code in a fourth. Leva and React
+        // version independently, so keeping them apart means upgrading one no
+        // longer busts the other's cache.
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
           if (id.includes("/three/")) return "three";
+          if (
+            /\/(leva|@radix-ui|@stitches|@use-gesture|colord|react-colorful|react-dropzone|zustand|v8n|merge-value|dequal)\//.test(
+              id,
+            )
+          )
+            return "leva";
           return "vendor";
         },
       },
