@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import type { NiftiVolume } from "./nifti";
 import { colormapRGB } from "./colormaps";
+import type { NiftiVolume } from "./nifti";
 
 /**
  * Bottom-center widget: the volume's intensity histogram (log-scaled) with the

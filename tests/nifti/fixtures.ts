@@ -121,7 +121,11 @@ export function makeNifti(spec: NiftiSpec): ArrayBuffer {
 
   if (spec.srow) {
     const base = [280, 296, 312]; // srow_x/y/z
-    spec.srow.forEach((row, r) => row.forEach((c, i) => dv.setFloat32(base[r] + i * 4, c, le)));
+    spec.srow.forEach((row, r) => {
+      row.forEach((c, i) => {
+        dv.setFloat32(base[r] + i * 4, c, le);
+      });
+    });
   }
 
   const desc = spec.descrip ?? "";
@@ -130,7 +134,9 @@ export function makeNifti(spec: NiftiSpec): ArrayBuffer {
   const magic = spec.magic ?? "n+1";
   for (let i = 0; i < magic.length && i < 4; i++) dv.setUint8(344 + i, magic.charCodeAt(i));
 
-  spec.voxels.forEach((v, i) => writeVoxel(dv, voxOffset + i * bpv, code, le, v));
+  spec.voxels.forEach((v, i) => {
+    writeVoxel(dv, voxOffset + i * bpv, code, le, v);
+  });
   return buf;
 }
 

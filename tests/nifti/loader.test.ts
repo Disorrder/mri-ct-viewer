@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { maybeGunzip, loadNiftiFromUrl, type LoadProgress } from "../../src/nifti";
-import { makeNifti, gzip } from "./fixtures";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { type LoadProgress, loadNiftiFromUrl, maybeGunzip } from "../../src/nifti";
+import { gzip, makeNifti } from "./fixtures";
 
 afterEach(() => vi.restoreAllMocks());
 

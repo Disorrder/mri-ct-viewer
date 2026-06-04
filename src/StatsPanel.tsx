@@ -27,7 +27,7 @@ export function shortGpu(name: string): string {
     .replace(/\s*\(.*$/, "")
     .replace(/^ANGLE.*Renderer:\s*/i, "")
     .trim();
-  return clean.length > 30 ? clean.slice(0, 29) + "…" : clean;
+  return clean.length > 30 ? `${clean.slice(0, 29)}…` : clean;
 }
 
 export function StatsPanel({ viewer }: { viewer: VolumeViewer }) {

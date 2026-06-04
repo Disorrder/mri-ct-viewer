@@ -601,6 +601,7 @@ body,
 
 /* Leva fills the sheet body instead of floating as its own fixed panel. */
 .sheet-body > div {
+  /* biome-ignore lint/complexity/noImportantStyles: overrides Leva's injected inline width */
   width: 100% !important;
 }
 

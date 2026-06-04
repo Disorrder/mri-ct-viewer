@@ -13,8 +13,8 @@
  */
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { SLICE_FRAG, SLICE_VERT, VOLUME_FRAG, VOLUME_VERT } from "./glsl";
 import type { NiftiVolume } from "./nifti";
-import { VOLUME_VERT, VOLUME_FRAG, SLICE_VERT, SLICE_FRAG } from "./glsl";
 
 // Render layers — in the MPR layout each viewport's camera sees only what it
 // should. slicePlanes/crosshairs are ordered [sagittal, coronal, axial].
@@ -460,7 +460,9 @@ export class VolumeViewer {
 
     // The 3D (perspective) camera also sees the slice-plane layers, so the
     // fullscreen "Slices" mode works; crosshair layers (4-6) stay off it.
-    L_PLANE.forEach((l) => this.camera.layers.enable(l));
+    L_PLANE.forEach((l) => {
+      this.camera.layers.enable(l);
+    });
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
@@ -667,7 +669,9 @@ export class VolumeViewer {
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
       const cols: number[] = [];
-      crossCol[i].forEach((c) => cols.push(c.r, c.g, c.b));
+      crossCol[i].forEach((c) => {
+        cols.push(c.r, c.g, c.b);
+      });
       g.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
       const line = new THREE.LineSegments(g, this.crossMat);
       line.layers.set(L_CROSS[i]);
@@ -688,7 +692,7 @@ export class VolumeViewer {
   private layoutCameras(w: number, h: number) {
     if (w === 0 || h === 0) return;
     const aspect = w / h;
-    const fit = (cam: THREE.OrthographicCamera, halfR: number, halfU: number) => {
+    const fitFrustum = (cam: THREE.OrthographicCamera, halfR: number, halfU: number) => {
       const m = 1.08; // a little padding around the slice
       let hr = halfR * m;
       let hu = halfU * m;
@@ -703,9 +707,9 @@ export class VolumeViewer {
       cam.updateProjectionMatrix();
     };
     const { x: bx, y: by, z: bz } = this.boxSize;
-    fit(this.camAxial, bx / 2, by / 2);
-    fit(this.camCoronal, bx / 2, bz / 2);
-    fit(this.camSagittal, by / 2, bz / 2);
+    fitFrustum(this.camAxial, bx / 2, by / 2);
+    fitFrustum(this.camCoronal, bx / 2, bz / 2);
+    fitFrustum(this.camSagittal, by / 2, bz / 2);
   }
 
   /** Visible extent (mm) of each 2D view — for the ruler overlay (V = vertical, H = horizontal). */
@@ -779,7 +783,9 @@ export class VolumeViewer {
     if (!this.gizmoCube) return;
     this.gizmoScene.remove(this.gizmoCube);
     this.gizmoCube.geometry.dispose();
-    this.gizmoMats.forEach((m) => m.dispose());
+    this.gizmoMats.forEach((m) => {
+      m.dispose();
+    });
     this.gizmoLabelMeshes.forEach((p) => {
       p.geometry.dispose();
       const m = p.material as THREE.MeshBasicMaterial;
@@ -873,7 +879,10 @@ export class VolumeViewer {
     // The 3D quadrant in MPR shows just the volume; in 3D layout the perspective
     // camera also shows the slice planes (for "Slices" mode). In any 2D layout
     // the perspective camera isn't rendered, so its plane layers stay off.
-    L_PLANE.forEach((l) => (ortho ? this.camera.layers.disable(l) : this.camera.layers.enable(l)));
+    L_PLANE.forEach((l) => {
+      if (ortho) this.camera.layers.disable(l);
+      else this.camera.layers.enable(l);
+    });
 
     const clim = new THREE.Vector2(p.windowLow, p.windowHigh);
     this.volumeMat.uniforms.uClim.value = clim;
@@ -1210,7 +1219,9 @@ export class VolumeViewer {
     this.disposeVolumeObjects();
     this.disposeGizmoCube();
     this.volumeMat.dispose();
-    this.sliceMats.forEach((m) => m.dispose());
+    this.sliceMats.forEach((m) => {
+      m.dispose();
+    });
     this.crossMat.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();

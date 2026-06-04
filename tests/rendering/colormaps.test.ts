@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { colormapRGB } from "../../src/colormaps";
-import { COMMON, COLORMAPS } from "../../src/glsl";
+import { COLORMAPS, COMMON } from "../../src/glsl";
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const inByte = (v: number) => v >= 0 && v <= 255;

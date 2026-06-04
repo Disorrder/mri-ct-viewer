@@ -1,23 +1,23 @@
+import { button, folder, Leva, useControls } from "leva";
 import {
+  type ReactNode,
+  type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
   useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
-  type ReactNode,
 } from "react";
-import { button, folder, Leva, useControls } from "leva";
+import { COLORMAPS, SLAB_PROJECTIONS, TECHNIQUES } from "./glsl";
+import { IntensityPanel } from "./IntensityPanel";
+import { loadNiftiFromUrl, type NiftiVolume, parseNifti } from "./nifti";
+import { StatsPanel } from "./StatsPanel";
 import {
-  PLANE_COLORS,
-  VolumeViewer,
   type Layout,
+  PLANE_COLORS,
   type SlicePick,
   type ViewerParams,
+  VolumeViewer,
 } from "./VolumeViewer";
-import { loadNiftiFromUrl, parseNifti, type NiftiVolume } from "./nifti";
-import { COLORMAPS, SLAB_PROJECTIONS, TECHNIQUES } from "./glsl";
-import { StatsPanel } from "./StatsPanel";
-import { IntensityPanel } from "./IntensityPanel";
 
 /** The sample volumes served from /public. */
 const DATASETS: Record<string, { url: string; label: string }> = {
@@ -520,6 +520,7 @@ function MobileTopBar({ active, onSelect }: { active: string; onSelect: (v: Layo
     <div className="topbar">
       {PHONE_TABS.map((t) => (
         <button
+          type="button"
           key={t.key}
           className={`topbar-tab${active === t.key ? " active" : ""}`}
           onClick={() => onSelect(t.key)}
@@ -793,7 +794,7 @@ function SinglePlaneOverlay({
 /** Smallest "nice" cm step (…0.1, 0.2, 0.5, 1, 2, 5, 10…) that is at least `minPx` wide on screen. */
 export function niceCmStep(minPx: number, pxPerCm: number): number {
   const minCm = minPx / pxPerCm;
-  const pow = Math.pow(10, Math.floor(Math.log10(minCm)));
+  const pow = 10 ** Math.floor(Math.log10(minCm));
   for (const m of [1, 2, 5]) if (m * pow >= minCm) return m * pow;
   return 10 * pow;
 }
@@ -807,7 +808,7 @@ export function niceCmStep(minPx: number, pxPerCm: number): number {
  */
 export function rulerScheme(pxPerCm: number, minLabelPx: number) {
   const labelCm = niceCmStep(minLabelPx, pxPerCm);
-  const mant = Math.round(labelCm / Math.pow(10, Math.floor(Math.log10(labelCm) + 1e-9))); // 1, 2 or 5
+  const mant = Math.round(labelCm / 10 ** Math.floor(Math.log10(labelCm) + 1e-9)); // 1, 2 or 5
   const sub = mant === 5 ? 5 : 2; // subdivisions that keep minor ticks on nice values
   const minorCm = labelCm / sub;
   const useMinor = minorCm * pxPerCm >= 5;
@@ -851,7 +852,7 @@ function drawRuler(
   ctx.font = "9px ui-monospace, SFMono-Regular, Menlo, monospace";
 
   // Vertical scale along the inner vertical edge; ticks point into the viewport.
-  if (mmV > 0 && isFinite(mmV)) {
+  if (mmV > 0 && Number.isFinite(mmV)) {
     const rx = vEdge === "right" ? left + w - 1 : left + 1;
     const into = vEdge === "right" ? -1 : 1; // tick direction (toward the viewport)
     const pxPerCm = (h / mmV) * 10;
@@ -881,7 +882,7 @@ function drawRuler(
   }
 
   // Horizontal scale along the inner horizontal edge; ticks point into the viewport.
-  if (mmH > 0 && isFinite(mmH)) {
+  if (mmH > 0 && Number.isFinite(mmH)) {
     const ry = hEdge === "bottom" ? top + h - 1 : top + 1;
     const into = hEdge === "bottom" ? -1 : 1; // tick direction (toward the viewport)
     const pxPerCm = (w / mmH) * 10;
@@ -955,8 +956,10 @@ function InfoPanel({ volume, mode }: { volume: NiftiVolume; mode: string }) {
         <table>
           <tbody>
             {h.affine.map((row, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: static 4x4 affine, never reordered
               <tr key={i}>
                 {row.map((c, j) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: static row, never reordered
                   <td key={j}>{fmt(c)}</td>
                 ))}
               </tr>
