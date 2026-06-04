@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { drawRuler } from "../lib/ruler";
-import type { NiftiVolume } from "../nifti";
 import { PLANE_COLORS, type VolumeViewer } from "../rendering";
+import type { Volume } from "../volume";
 
 /**
  * MPR overlay: colored viewport titles + slice indices, plus a live cm ruler on
@@ -18,7 +18,7 @@ export function MprOverlay({
   showRuler,
 }: {
   viewer: VolumeViewer;
-  volume: NiftiVolume;
+  volume: Volume;
   sliceX: number;
   sliceY: number;
   sliceZ: number;

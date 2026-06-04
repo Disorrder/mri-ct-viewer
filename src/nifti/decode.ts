@@ -1,3 +1,4 @@
+import { quantize } from "../volume";
 import { parseHeader } from "./header";
 import type { NiftiHeader, NiftiVolume } from "./types";
 
@@ -71,47 +72,18 @@ export function parseDecompressed(buf: ArrayBuffer): NiftiVolume {
   // would be pure waste since the UI only needs the texture + header.
   const raw = readVoxels(buf, header, n);
 
-  // --- Find min/max of display values (raw * slope + inter).
+  // scl_slope = 0 means "no scaling" by the NIfTI convention.
   const slope = header.sclSlope === 0 ? 1 : header.sclSlope;
-  const inter = header.sclInter;
-  let lo = Infinity,
-    hi = -Infinity;
-  for (let i = 0; i < n; i++) {
-    const v = raw[i];
-    if (v < lo) lo = v;
-    if (v > hi) hi = v;
-  }
-  const span = hi - lo || 1;
-
-  // --- Re-quantize to 0..255 for the R8 texture, and build a 256-bin histogram.
-  const texture = new Uint8Array(n);
-  const hist = new Uint32Array(256);
-  for (let i = 0; i < n; i++) {
-    const b = Math.round(((raw[i] - lo) / span) * 255);
-    texture[i] = b;
-    hist[b]++;
-  }
-
-  // --- Auto window: 1st..99th percentile of voxels (ignoring the empty-air bin 0).
-  const total = n - hist[0];
-  let acc = 0,
-    p1 = 0,
-    p99 = 255;
-  for (let b = 1; b < 256; b++) {
-    acc += hist[b];
-    if (acc <= 0.02 * total) p1 = b;
-    if (acc <= 0.98 * total) p99 = b;
-  }
+  const stats = quantize(raw, n, slope, header.sclInter);
 
   return {
+    format: "nifti",
     header,
     nx,
     ny,
     nz,
-    texture,
-    displayMin: lo * slope + inter,
-    displayMax: hi * slope + inter,
-    suggestedWindow: [p1 / 255, p99 / 255],
-    histogram: hist,
+    spacing: [header.pixdim[1], header.pixdim[2], header.pixdim[3]],
+    affine: header.affine,
+    ...stats,
   };
 }

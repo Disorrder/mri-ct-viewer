@@ -3,6 +3,7 @@
  * official `nifti1.h` struct:
  *   https://nifti.nimh.nih.gov/pub/dist/src/niftilib/nifti1.h
  */
+import type { VolumeBase } from "../volume";
 
 export interface NiftiHeader {
   sizeofHdr: number; // must be 348 — also used to detect endianness
@@ -26,23 +27,9 @@ export interface NiftiHeader {
   magic: string; // "n+1" (single file) or "ni1" (header/data pair)
 }
 
-export interface NiftiVolume {
+export interface NiftiVolume extends VolumeBase {
+  format: "nifti";
   header: NiftiHeader;
-  nx: number;
-  ny: number;
-  nz: number;
-  /**
-   * Voxels re-quantized to 0..255 for a WebGL2 R8 3D texture.
-   * Layout matches Data3DTexture: index = x + y*nx + z*nx*ny.
-   */
-  texture: Uint8Array<ArrayBuffer>;
-  /** Min/max of *display* values (after applying sclSlope/sclInter). */
-  displayMin: number;
-  displayMax: number;
-  /** A robust default window/level, in normalized [0,1] texture space. */
-  suggestedWindow: [number, number];
-  /** 256-bin intensity histogram over the normalized [0,1] range. */
-  histogram: Uint32Array;
 }
 
 export type LoadPhase = "download" | "decompress" | "parse";

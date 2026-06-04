@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { SinglePlane } from "../lib/layout";
 import { drawRuler } from "../lib/ruler";
-import type { NiftiVolume } from "../nifti";
 import { PLANE_COLORS, type VolumeViewer } from "../rendering";
+import type { Volume } from "../volume";
 
 /**
  * Phone single-plane overlay: one orthogonal view filling the screen. Shows the
@@ -20,7 +20,7 @@ export function SinglePlaneOverlay({
   showRuler,
 }: {
   viewer: VolumeViewer;
-  volume: NiftiVolume;
+  volume: Volume;
   plane: SinglePlane;
   sliceX: number;
   sliceY: number;
