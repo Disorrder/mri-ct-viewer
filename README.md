@@ -1,176 +1,107 @@
-# DICOM / NIfTI volume viewer — учебная демка
+# DICOM / NIfTI volume viewer
 
-Интерактивная сцена на **Three.js (WebGL2) + React + TypeScript + Vite + Leva**,
-сделанная, чтобы *на практике* понять, как устроены медицинские форматы данных.
-Три датасета: **МРТ** мозга (T1, uint8) и шаблон MNI152, плюс **КТ** брюшной
-полости (int16, в единицах Хаунсфилда — со знаком, воздух ≈ −1000, кость ≈ +1000).
-МРТ vs КТ хорошо видно прямо в заголовке: `datatype` (uint8 vs int16) и
-`display range` (0…255 vs −1024…3302 HU).
+An educational **WebGL2 volume viewer** for brain MRI / abdominal CT, built to
+learn — by implementing it — how medical-imaging data formats actually work.
 
-Заголовок NIfTI парсится «вживую» из 348 байт и показывается в панели слева, а сам
-объём отрисовывается объёмным ray-marching'ом (DVR / MIP / изоповерхность) и
-ортогональными срезами (axial / coronal / sagittal).
+Stack: **Three.js (WebGL2) · React 19 · TypeScript · Vite · Leva**. No
+parser libraries: the NIfTI-1 header and gzip are decoded by hand, on purpose,
+for clarity.
 
-Два **лейаута** (переключатель `layout`):
+> 🇷🇺 Исходная русская версия — [README.ru.md](README.ru.md).
 
-- **3D** — объёмный вид на весь экран (как описано выше).
-- **MPR (2×2)** — «рабочий стол радиолога», как в дентальном CBCT-вьювере:
-  Coronal (←верх), Sagittal (→верх), Axial (←низ), 3D (→низ). Заголовки и линии
-  перекрестья — в цветах плоскостей (axial=зелёный, coronal=жёлтый,
-  sagittal=красный); по двум внутренним краям каждого 2D-вида (тем, что сходятся
-  в центре экрана) — **линейки в см** (вертикальная и горизонтальная, в центре
-  остаётся небольшой пустой квадрат). Шаг линеек подстраивается под зум по
-  «красивой» шкале 1/2/5: при отдалении цифры прореживаются (2, 5, 10 см…), при
-  сильном приближении показываются дробные (0.5, 0.2, 0.1 см) — чтобы подписи не
-  накладывались. Включается тумблером `rulers` в разделе `other`. Клик/драг по
-  2D-виду двигает срез во всех видах (с **Shift** — фиксация по доминирующей оси),
-  **колесо над 2D-видом** масштабирует все три 2D-вида вместе с линейкой, а драг/колесо
-  в 3D-квадранте — орбита/зум.
-  Реализовано через один renderer с 4 viewport'ами (scissor) и слои (layers) —
-  каждая камера видит только «свой» срез и перекрестье. Выбор «орбита vs
-  перекрестье» решается по квадранту в capture-фазе `pointerdown`.
+## What it does
 
-**Толщина среза (slab thickness)** — контрол `thickness (mm)` в папке slices.
-По умолчанию **1 мм** (= один воксель, тонкий срез). При большей толщине каждый
-2D-срез сэмплит слэб вдоль своей нормали и проецирует его: `mean` (мягкие ткани),
-`MIP` (сосуды/контраст) или `MinIP` (воздух). Толщина в мм пересчитывается в число
-вокселей по spacing соответствующей оси, поэтому 1 мм всегда = ровно один воксель.
+- Streams a `.nii.gz` volume, gunzips it in the browser with the native
+  `DecompressionStream`, and parses the NIfTI-1 header + voxels **from scratch**.
+- Uploads the voxels as a single-channel `R8` 3D texture and **ray-marches** it
+  on the GPU — MIP, isosurface, and DVR — with orthogonal slice planes and an
+  MPR ("radiologist's desktop") 2×2 layout.
+- Surfaces every concept in the UI: the live-parsed 348-byte header, an
+  intensity histogram, the window/level knob, a **real GPU-time** counter
+  (WebGL2 timer query), and an anatomically-labelled orientation cube.
+- Three sample datasets show MRI vs CT directly in the header: `uint8` 0…255 vs
+  `int16` Hounsfield units.
 
-Дополнительно: контролы в Leva **контекстные** (видно только то, что влияет на
-текущий режим), внизу слева — **живой счётчик** FPS / CPU / GPU / RAM (реальное
-GPU-время через WebGL2 timer query), а датасеты грузятся **лениво** с
-**прогресс-баром** (скачивание → gunzip → парсинг → сборка сцены) и кэшируются.
+Extras: drag-and-drop your own `.nii`/`.nii.gz`, a box cut-plane, window presets,
+a PNG screenshot, cm rulers on the 2D views, and a phone layout (top-bar views +
+swipe-up controls sheet).
 
-Быстрые победы поверх этого:
-
-- **Drag-and-drop** своего `.nii` / `.nii.gz` прямо в окно (парсер уже принимает `ArrayBuffer`).
-- **Cut (box-crop)** — отсечение объёма **коробкой**: по **двойному слайдеру**
-  Leva (interval) на каждую из осей X/Y/Z. Оставляем воксели внутри коробки
-  (пересечение трёх диапазонов), тумблер `invert` вырезает её вместо этого.
-  Границы коробки показаны оранжевым wireframe.
-- **Пресеты окна** (auto по данным / full / high-contrast) + **гистограмма
-  интенсивностей с colorbar-легендой** внизу (видно текущее окно в реальных значениях).
-- **Скриншот** сцены в PNG одной кнопкой.
-- **Orientation cube** (ViewCube) в углу 3D-вида: крутится вместе с камерой,
-  грани подписаны анатомически (**R/L, A/P, S/I** — вычисляются из аффинной
-  матрицы), клик по грани разворачивает камеру к этому виду (только вращение).
-- **Мобильный вид**: на планшетах (≤ 700px) панель Leva сворачивается, тяжёлые
-  панели ужимаются/прячутся, жесты (вращение/пинч) отдаются канвасу
-  (`touch-action: none`). На **узких телефонах (< 500px)** интерфейс перестраивается:
-  сверху — **бар из 4 видов** (**3D · Axial · Coronal · Sagittal**), каждый
-  ортогональный срез открывается на весь экран (со своей линейкой и перекрестьем,
-  тап/драг двигает срез), а вся панель Leva уезжает в **нижнюю шторку** —
-  выезжает свайпом снизу поверх всего (переключатель Volume/Slices для 3D — там же).
+## Quick start
 
 ```bash
 npm install
 npm run dev      # http://localhost:5173
 ```
 
-> Данные лежат в `public/*.nii.gz` (уже скачаны). Небольшой плагин в
-> [`vite.config.ts`](vite.config.ts) отдаёт их **сырыми байтами** (без
-> `Content-Encoding: gzip`), иначе Vite/браузер распаковал бы gzip сам —
-> и тогда наш `DecompressionStream` не работал бы, а прогресс скачивания врал бы
-> (Content-Length = сжатый размер, а тело — уже распакованное). Так приложение
-> получает настоящий `.nii.gz` и распаковывает его само, нативным
-> `DecompressionStream` — без зависимостей.
+The sample volumes in `public/*.nii.gz` are served as **raw bytes** by a small
+Vite plugin (so the browser does not silently inflate the gzip and break the
+download-progress accounting). See [docs/development.md](docs/development.md).
 
----
+## Scripts
 
-## Что здесь смотреть, чтобы разобраться в форматах
+| Script | Purpose |
+|--------|---------|
+| `npm run dev` | Vite dev server with HMR. |
+| `npm run build` | Type-check + production build. |
+| `npm run test` / `test:run` | Vitest (watch / single run). |
+| `npm run coverage` | Vitest + V8 coverage. |
+| `npm run lint` / `check` | Biome lint / lint + format check. |
+| `npm run format` | Biome format-write. |
 
-| Файл | Зачем |
-|------|-------|
-| [`src/nifti.ts`](src/nifti.ts) | **Главное.** Свой парсер NIfTI-1 с нуля: каждое поле заголовка с его байтовым смещением, аффинная матрица из quaternion/srow, чтение вокселей по datatype. |
-| [`src/glsl.ts`](src/glsl.ts) | Шейдеры: ray-marching объёма (MIP/ISO/DVR), window/level, colormap, сэмплер срезов. |
-| [`src/VolumeViewer.ts`](src/VolumeViewer.ts) | Как воксели становятся 3D-текстурой (`Data3DTexture`, формат R8) и как из spacing получается пропорция. Плюс: MPR-лейаут (4 viewport'а через scissor + layers, ортокамеры, перекрестье, `pickSlice` для кликов), инструментация GPU/CPU. |
-| [`src/StatsPanel.tsx`](src/StatsPanel.tsx) | Оверлей FPS/CPU/GPU/RAM. Свой rAF-цикл пишет в DOM по ref + рисует спарклайн на canvas — **без ре-рендера React** каждый кадр. |
-| [`src/IntensityPanel.tsx`](src/IntensityPanel.tsx) | Гистограмма интенсивностей (лог-шкала) + colorbar-легенда: видно, как текущее окно маппится через colormap, с подписями в реальных значениях. |
-| [`src/colormaps.ts`](src/colormaps.ts) | JS-порт GLSL-colormap'ов для отрисовки легенды/гистограммы на 2D-canvas. |
-| [`src/App.tsx`](src/App.tsx) | React + Leva: контекстные контролы, ленивая загрузка с кэшем, прогресс-бар, drag-and-drop, cut-plane, пресеты окна, скриншот. |
-
----
-
-## NIfTI в двух абзацах
-
-Файл `.nii` — это буквально:
+## Project structure
 
 ```
-[ 348-байтный заголовок ][ (необязательные расширения) ][ сырые воксели ]
+src/
+  App.tsx           # slim orchestrator: state, Leva schema, effects, JSX
+  nifti/            # NIfTI-1 parsing — no DOM, no WebGL (types/header/decode/loader)
+  rendering/        # Three.js / WebGL2: VolumeViewer, glsl shaders, colormaps, viewcube
+  components/       # React UI: panels + overlays
+  hooks/            # useMediaQuery, useVolumeLoader
+  config/           # sample datasets + Leva-values -> ViewerParams mapping
+  lib/              # pure, framework-free, unit-tested: ruler, format, gpu, layout
+tests/              # Vitest suites, mirroring src/
+docs/               # architecture, format spec, rendering, testing, development
 ```
 
-Заголовок — это фиксированная C-структура (`nifti1.h`). Каждое поле живёт по
-известному смещению. Ключевые, которые видно в панели демки:
+Full details: [docs/architecture.md](docs/architecture.md).
 
-- **`dim[]`** — размеры объёма в вокселях (напр. `188 × 256 × 190`).
-- **`datatype` / `bitpix`** — тип вокселя (`uint8`, `int16`, `float32`…).
-- **`pixdim[1..3]`** — физический размер вокселя в мм (**spacing**). Именно он
-  задаёт пропорции: без него мозг был бы кубиком из одинаковых клеток.
-- **`scl_slope` / `scl_inter`** — линейное пересчёт сырого значения в физическое:
-  `value = raw * slope + inter` (у MNI152 slope = 0.363 — это видно в панели).
-- **`srow_*` / quaternion (`qform`/`sform`)** — аффинная матрица **voxel → world (RAS)**:
-  где воксель `(i,j,k)` находится в пространстве пациента (Right-Anterior-Superior).
-- **`magic`** — `"n+1"` для однофайлового `.nii`.
+## Learn the formats
 
-`.nii.gz` — это просто gzip поверх `.nii`.
+The whole point of the project. Start with:
 
-## А чем DICOM отличается
+- **[docs/nifti-format.md](docs/nifti-format.md)** — the NIfTI-1 file format field
+  by field (and the spec the parser tests verify). Code: [`src/nifti/`](src/nifti/).
+- **[docs/rendering.md](docs/rendering.md)** — 3D textures, the volume
+  ray-marcher, MPR, the orientation cube. Code: [`src/rendering/`](src/rendering/).
+- **[docs/dicom-vs-nifti.md](docs/dicom-vs-nifti.md)** — why the same concepts
+  (voxels, spacing, orientation, window, rescale) apply to DICOM.
 
-Пиксели те же, но «обёртка» совсем другая:
+## Tests & quality
 
-| | **NIfTI** | **DICOM** |
-|--|-----------|-----------|
-| Структура | один файл, фиксированный заголовок | формат на **тегах** (`group,element`), сотни атрибутов |
-| Объём | весь 3D-том в одном файле | обычно **один файл на срез**, серия = папка из сотен файлов |
-| Метаданные | минимум (геометрия) | пациент, прибор, протокол, модальность (CT/MR/…) |
-| Геометрия | аффинная матрица в заголовке | `ImagePositionPatient` + `ImageOrientationPatient` + `PixelSpacing` на каждый срез |
-| Окно | `cal_min`/`cal_max` (подсказка) | `WindowCenter` / `WindowWidth` |
-| Шкала | `scl_slope`/`scl_inter` | `RescaleSlope` / `RescaleIntercept` (в КТ → единицы Хаунсфилда) |
+Vitest + Testing Library, **77 tests**. Pure logic (parser, colormaps, ruler and
+orientation math, formatters, control mapping) is covered exhaustively; React
+components get jsdom smoke tests. The WebGL renderer is validated by hand, not in
+jsdom — see [docs/testing.md](docs/testing.md). Linting/formatting via
+[Biome](https://biomejs.dev).
 
-То есть концепции **те же** (воксели, spacing, ориентация, окно, rescale) —
-меняется только способ их хранения. Поэтому, разобравшись с заголовком NIfTI,
-вы уже понимаете 80% того, что нужно знать про DICOM. NIfTI как раз и придумали,
-чтобы из груды DICOM-срезов получить один удобный том для обработки.
+## Honest simplifications
 
----
+This is a learning demo, not clinical software:
 
-## Концепции радиологии, которые демонстрирует сцена
+- Rendering happens in **voxel-axis space**; the full world affine is shown in
+  the UI but not baked into geometry (keeps the math transparent).
+- Voxels are quantized to **8 bits** (lossless for the `uint8` samples; a
+  deliberate simplification for `int16`/`float32`).
+- Only the first volume of a 4-D series is read.
 
-- **Воксель** — 3D-аналог пикселя; вся «модель» — это сетка интенсивностей.
-- **Spacing** — анизотропия/пропорции (см. как меняется форма при загрузке).
-- **Window / Level** — ползунки `low/high`: ровно так радиолог «подкручивает»
-  контраст, показывая только нужный диапазон яркостей (мягкие ткани vs кость).
-- **MIP** — проекция максимальной интенсивности (классика для сосудов/ангиографии).
-- **Изоповерхность** — первый воксель выше порога + затенение по градиенту (≈ «кожа»).
-- **DVR** (direct volume rendering) — накопление прозрачности вдоль луча сквозь весь объём.
-- **Ортогональные срезы** — три перпендикулярные плоскости: так смотрят на сканах в клинике.
+## Data & sources
 
----
+Sample NIfTI volumes come from the **NiiVue** demo set
+([niivue/niivue-demo-images](https://github.com/niivue/niivue-demo-images)) —
+deliberately low resolution so they load fast:
 
-## Честные упрощения (это демка, не клинический софт)
+- `chris_t1.nii.gz` — individual T1 head MRI (uint8).
+- `mni152.nii.gz` — ICBM 152 template (averaged brain, uint8).
+- `CT_Abdo.nii.gz` — abdominal CT (int16, Hounsfield units).
 
-- Рендер идёт в **пространстве вокселей** (оси i/j/k → X/Y/Z бокса). Полная
-  мировая аффинная матрица из заголовка показана в панели, но не «запекается»
-  в геометрию — так математика остаётся прозрачной. Камера ориентирована так,
-  что ось k (макушка) смотрит вверх.
-- Воксели квантуются в **8 бит** (текстура R8). Для наших сэмплов это без потерь
-  (они изначально `uint8`); для `int16`/`float32` это огрубление ради простоты.
-- Берётся только первый том из 4-мерных серий (fMRI/DTI не разворачиваются по времени).
-
----
-
-## Данные и источники
-
-Сэмплы NIfTI взяты из проекта **NiiVue**
-([niivue/niivue-demo-images](https://github.com/niivue/niivue-demo-images),
-лицензия в репозитории) — намеренно низкого разрешения, чтобы быстро грузились:
-
-- `chris_t1.nii.gz` — индивидуальная T1-МРТ головы (uint8).
-- `mni152.nii.gz` — стандартный шаблон ICBM 152 (усреднённый мозг, uint8).
-- `CT_Abdo.nii.gz` — КТ брюшной полости (int16, HU; провенанс — Slicer3D / S. Pieper).
-  Хорошо смотрится как изоповерхность (порог ≈ кость → виден скелет).
-
-Спека формата: <https://nifti.nimh.nih.gov/nifti-1>.
-
-Стек: Three.js · React 19 · Vite 6 · Leva. Без библиотек-парсеров — NIfTI и gzip
-разбираются вручную специально ради наглядности.
+Format spec: <https://nifti.nimh.nih.gov/nifti-1>.
