@@ -6,30 +6,35 @@ import {
   InfoPanel,
   IntensityPanel,
   LoadBar,
-  MobileTopBar,
   MprOverlay,
+  ScenePerf,
   SinglePlaneOverlay,
-  StatsPanel,
+  ViewTabBar,
 } from "./components";
 import { toViewerParams } from "./config/controls";
 import { DATASETS } from "./config/datasets";
 import { useMediaQuery } from "./hooks/useMediaQuery";
 import { useVolumeLoader } from "./hooks/useVolumeLoader";
-import { isOrtho, isSinglePlane } from "./lib/layout";
-import type { NiftiVolume } from "./nifti";
+import { gatherFiles } from "./lib/drop";
+import { exportClippedNifti, FULL_BOX } from "./lib/exportClip";
+import { DESKTOP_TABS, isOrtho, isSinglePlane, PHONE_TABS } from "./lib/layout";
 import { COLORMAPS, SLAB_PROJECTIONS, type SlicePick, TECHNIQUES, VolumeViewer } from "./rendering";
+import type { Volume } from "./volume";
 
 export default function App() {
   const mountRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<VolumeViewer | null>(null);
-  const volumeRef = useRef<NiftiVolume | null>(null); // current volume, for Leva button closures
+  const volumeRef = useRef<Volume | null>(null); // current volume, for Leva button closures
   const draggingRef = useRef(false); // pointer drag state for MPR crosshair
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const lockAxisRef = useRef<"h" | "v" | null>(null); // Shift-locked axis during a drag
+  const histoFirstRun = useRef(true); // skip the mount run so the histogram fades in, not pops
   const [viewer, setViewer] = useState<VolumeViewer | null>(null);
-  const [volume, setVolume] = useState<NiftiVolume | null>(null);
+  const [volume, setVolume] = useState<Volume | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // The intensity histogram flashes up on window changes, then fades out (see effect below).
+  const [histoVisible, setHistoVisible] = useState(false);
   // Tablets (≤ 700px) start with the Leva panel collapsed; narrow phones (< 500px)
   // switch to the top-bar + bottom-sheet layout (controls move into a swipe-up sheet).
   const isMobile = useMediaQuery("(max-width: 700px)");
@@ -43,8 +48,9 @@ export default function App() {
       },
       layout: {
         value: "3D",
-        // On phones the top bar is the view switcher, so this control is hidden —
-        // but it still holds the value (single planes included) the rest of the UI reads.
+        // The top bar mirrors this control as a view switcher. On phones the bar fully
+        // replaces it (hidden); on desktop both are shown and share the same value
+        // (single planes included) that the rest of the UI reads.
         options: isPhone ? ["3D", "axial", "coronal", "sagittal"] : ["3D", "MPR"],
         render: () => !isPhone,
       },
@@ -161,6 +167,35 @@ export default function App() {
             label: "invert (cut out)",
             render: (get) => get("clip.clipEnabled"),
           },
+          // Save the cut region to disk. Always a NIfTI-1 `.nii` (the only format
+          // we can write from the neutral 8-bit volume — see lib/exportClip.ts),
+          // so it works for DICOM sources too. Leva buttons can't be conditionally
+          // rendered, so when the cut is off we export the whole volume instead.
+          "export cut (.nii)": button((get) => {
+            const v = volumeRef.current;
+            if (!v) return;
+            const box = get("clip.clipEnabled")
+              ? {
+                  min: [get("clip.clipX")[0], get("clip.clipY")[0], get("clip.clipZ")[0]] as [
+                    number,
+                    number,
+                    number,
+                  ],
+                  max: [get("clip.clipX")[1], get("clip.clipY")[1], get("clip.clipZ")[1]] as [
+                    number,
+                    number,
+                    number,
+                  ],
+                }
+              : FULL_BOX;
+            const blob = exportClippedNifti(v, box, v.format);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = get("clip.clipEnabled") ? "crop.nii" : "volume.nii";
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }),
         },
         {
           render: (get) =>
@@ -180,6 +215,16 @@ export default function App() {
           a.click();
         }),
       }),
+      // Live performance overlay (ScenePerf). On/off + compact/full readout.
+      "scene perf": folder({
+        showPerf: { value: true, label: "show" },
+        perfDetail: {
+          value: isPhone ? "compact" : "full",
+          options: ["compact", "full"],
+          label: "detail",
+          render: (get) => get("scene perf.showPerf"),
+        },
+      }),
       // Ruler toggle — applies to every 2D layout (MPR grid + single planes).
       other: folder(
         {
@@ -193,7 +238,7 @@ export default function App() {
 
   // Build the scene for a parsed volume + reset the window to its auto value.
   const applyVolume = useCallback(
-    (vol: NiftiVolume) => {
+    (vol: Volume) => {
       viewerRef.current?.setVolume(vol);
       volumeRef.current = vol;
       setVolume(vol);
@@ -206,7 +251,7 @@ export default function App() {
 
   // Dataset loading (fetch + parse + cache + progress) and drag-and-drop live in
   // a hook; applyVolume is the sink it calls for every parsed volume.
-  const { progress, error, loadFile } = useVolumeLoader(params.dataset, applyVolume);
+  const { progress, error, loadFiles } = useVolumeLoader(params.dataset, applyVolume);
 
   // --- Create the Three.js viewer once.
   useEffect(() => {
@@ -243,6 +288,25 @@ export default function App() {
     viewerRef.current?.applyParams(toViewerParams(params));
   }, [params]);
 
+  // --- Inputs the intensity histogram reads.
+  const colormapIndex = COLORMAPS.indexOf(params.colormap as (typeof COLORMAPS)[number]);
+  const windowLow = (params.window as number[])[0];
+  const windowHigh = (params.window as number[])[1];
+
+  // --- In 3D the histogram lives at the bottom permanently. In the 2D layouts it
+  //     would crowd the views, so there it only flashes up on a window change and
+  //     fades out 2s after the last one (debounced).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: low/high are intentional triggers — the effect fires on every range change, it doesn't read them.
+  useEffect(() => {
+    if (histoFirstRun.current) {
+      histoFirstRun.current = false;
+      return; // mount with it hidden, so the first reveal animates in
+    }
+    setHistoVisible(true);
+    const id = window.setTimeout(() => setHistoVisible(false), 2000);
+    return () => window.clearTimeout(id);
+  }, [windowLow, windowHigh]);
+
   return (
     <>
       {/* Desktop: the usual fixed Leva panel. Phones get it in the bottom sheet below. */}
@@ -260,8 +324,9 @@ export default function App() {
         onDrop={(e) => {
           e.preventDefault();
           setDragActive(false);
-          const f = e.dataTransfer.files?.[0];
-          if (f) loadFile(f);
+          gatherFiles(e.dataTransfer).then((files) => {
+            if (files.length) loadFiles(files);
+          });
         }}
       >
         <div
@@ -314,7 +379,20 @@ export default function App() {
             lockAxisRef.current = null;
           }}
         />
-        {isPhone && <MobileTopBar active={params.layout} onSelect={(v) => set({ layout: v })} />}
+        {isPhone ? (
+          <ViewTabBar
+            tabs={PHONE_TABS}
+            active={params.layout}
+            onSelect={(v) => set({ layout: v })}
+          />
+        ) : (
+          <ViewTabBar
+            tabs={DESKTOP_TABS}
+            className="topbar-desktop"
+            active={params.layout}
+            onSelect={(v) => set({ layout: v })}
+          />
+        )}
         {volume && params.layout === "3D" && <InfoPanel volume={volume} mode={params.mode} />}
         {volume && viewer && params.layout === "MPR" && (
           <MprOverlay
@@ -337,13 +415,16 @@ export default function App() {
             showRuler={params.showRuler}
           />
         )}
-        {viewer && <StatsPanel viewer={viewer} />}
-        {volume && !progress && params.layout === "3D" && (
+        {viewer && params.showPerf && (
+          <ScenePerf viewer={viewer} detail={params.perfDetail as "compact" | "full"} />
+        )}
+        {volume && !progress && (
           <IntensityPanel
             volume={volume}
-            low={(params.window as number[])[0]}
-            high={(params.window as number[])[1]}
-            colormap={COLORMAPS.indexOf(params.colormap as (typeof COLORMAPS)[number])}
+            low={windowLow}
+            high={windowHigh}
+            colormap={colormapIndex}
+            visible={params.layout === "3D" || histoVisible}
           />
         )}
         {progress && <LoadBar fraction={progress.fraction} label={progress.label} />}

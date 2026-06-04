@@ -135,8 +135,8 @@ body,
   max-width: 70vw;
 }
 
-/* --- Live performance overlay (FPS/CPU/GPU/RAM) ------------------------ */
-.stats {
+/* --- Live performance overlay (ScenePerf) ------------------------------ */
+.scene-perf {
   position: absolute;
   left: 16px;
   bottom: 16px;
@@ -156,13 +156,18 @@ body,
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
 }
 
-.stats-top {
+/* The full readout packs more in; columns let it stay short, so it's a bit wider. */
+.scene-perf[data-detail="full"] {
+  width: 224px;
+}
+
+.perf-top {
   display: flex;
   align-items: baseline;
   gap: 6px;
 }
 
-.stats-fps {
+.perf-fps {
   font-size: 26px;
   font-weight: 700;
   line-height: 1;
@@ -170,15 +175,21 @@ body,
   font-variant-numeric: tabular-nums;
 }
 
-.stats-fps-unit {
+.perf-unit {
   font-size: 10px;
   letter-spacing: 1px;
   color: #7f93b3;
 }
 
-.stats-gpu-name {
+.perf-frame {
+  font-size: 10px;
+  color: #8c9bb4;
+  font-variant-numeric: tabular-nums;
+}
+
+.perf-gpu {
   margin-left: auto;
-  max-width: 100px;
+  max-width: 92px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -186,33 +197,84 @@ body,
   color: #8c9bb4;
 }
 
-.stats-graph {
+.perf-graph {
   display: block;
-  width: 150px;
-  height: 38px;
+  width: 100%;
+  height: 34px;
   margin: 8px 0;
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.25);
 }
 
-.stats-rows {
+/* 3-column device strips (CPU/GPU/RAM, and the rate avg/min/1%). */
+.perf-cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 8px;
+  margin-top: 4px;
+}
+
+.perf-cols > div {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
+  min-width: 0;
 }
 
-.stats-rows > div {
+.perf-cols .lbl {
+  font-size: 8.5px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #5e6f8c;
+}
+
+.perf-cols .abs {
+  color: #e6ecf6;
+  font-variant-numeric: tabular-nums;
+}
+
+.perf-cols .pct {
+  font-size: 10px;
+  color: #8c9bb4;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Section labels + the 2-column counter grids (collapse to 1 col when narrow). */
+.perf-sec {
+  margin: 8px 0 1px;
+  font-size: 8.5px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: #5e6f8c;
+}
+
+.perf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
+  gap: 2px 10px;
+}
+
+.perf-grid > div,
+.perf-row {
   display: flex;
   justify-content: space-between;
+  gap: 6px;
 }
 
-.stats-rows .k {
+.perf-row {
+  margin-top: 2px;
+}
+
+.perf-grid .k,
+.perf-row .k {
   color: #7f93b3;
 }
 
-.stats-rows .v {
+.perf-grid .v,
+.perf-row .v {
   color: #e6ecf6;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* --- Determinate loading bar ------------------------------------------- */
@@ -275,6 +337,15 @@ body,
   backdrop-filter: blur(8px);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
   pointer-events: none;
+  /* Hidden by default; revealed only while the window is being adjusted. The
+     fade-out (this transition) is slow and smooth; the fade-in (.visible) is fast. */
+  opacity: 0;
+  transition: opacity 0.55s ease;
+}
+
+.intensity.visible {
+  opacity: 1;
+  transition: opacity 0.2s ease-out;
 }
 
 .intensity-title {
@@ -409,20 +480,24 @@ body,
     display: none;
   }
 
-  /* Stats: compact, hide the sparkline. */
-  .stats {
+  /* ScenePerf: smaller type, hide the sparkline. */
+  .scene-perf {
     left: 8px;
     bottom: 8px;
     width: 132px;
     padding: 7px 9px;
+    font-size: 10px;
   }
-  .stats-fps {
+  .scene-perf[data-detail="full"] {
+    width: 182px; /* narrower than desktop; full view is opt-in on phones */
+  }
+  .perf-fps {
     font-size: 19px;
   }
-  .stats-gpu-name {
-    max-width: 64px;
+  .perf-gpu {
+    max-width: 60px;
   }
-  .stats-graph {
+  .perf-graph {
     display: none;
   }
 
@@ -443,7 +518,9 @@ body,
   }
 }
 
-/* --- Phone: top bar (4 fullscreen view tabs) --------------------------- */
+/* --- View switcher top bar --------------------------------------------- */
+/* Phones get the full-width bar (4 fullscreen view tabs); desktop gets the
+   compact centered pill below (.topbar-desktop) that toggles 3D ⇄ 2×2 MPR. */
 .topbar {
   position: absolute;
   top: 0;
@@ -457,6 +534,20 @@ body,
   background: rgba(10, 12, 17, 0.86);
   border-bottom: 1px solid rgba(120, 160, 220, 0.18);
   backdrop-filter: blur(8px);
+}
+
+/* Desktop: a centered segmented control instead of a full-width strip, so it
+   stays clear of the info panel (top-left) and the Leva panel (top-right). */
+.topbar-desktop {
+  left: 50%;
+  right: auto;
+  width: auto;
+  height: auto;
+  top: 12px;
+  transform: translateX(-50%);
+  padding: 4px;
+  border: 1px solid rgba(120, 160, 220, 0.18);
+  border-radius: 12px;
 }
 
 .topbar-tab {
@@ -479,6 +570,12 @@ body,
   border-color: rgba(120, 170, 240, 0.6);
   color: #eaf2ff;
   box-shadow: 0 2px 10px rgba(58, 110, 165, 0.45);
+}
+
+/* Desktop pills size to their content instead of stretching across the bar. */
+.topbar-desktop .topbar-tab {
+  flex: 0 0 auto;
+  padding: 8px 18px;
 }
 
 /* --- Phone: single-plane overlay (label + fullscreen ruler) ------------ */
@@ -611,7 +708,7 @@ body,
     top: 52px;
   }
   /* Sit above the sheet peek; on single-plane views, above the gesture hint too. */
-  .stats {
+  .scene-perf {
     bottom: 72px;
   }
   .loader,
