@@ -13,7 +13,7 @@
  */
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import type { NiftiVolume } from "../nifti";
+import type { Volume } from "../volume";
 import { SLICE_FRAG, SLICE_VERT, VOLUME_FRAG, VOLUME_VERT } from "./glsl";
 import {
   ANATOMY_WORDS,
@@ -46,18 +46,28 @@ interface TimerExt {
   readonly GPU_DISJOINT_EXT: number;
 }
 
-/** Live metrics surfaced to the StatsPanel overlay. */
+/** Live metrics surfaced to the ScenePerf overlay. */
 export interface ViewerStats {
-  fps: number;
+  fps: number; // exponentially smoothed frames/sec (the headline number)
+  frameMs: number; // raw interval since the previous frame — drives the 1%-low math
   cpuMs: number; // main-thread time spent in render() this frame
   gpuMs: number; // measured GPU time per frame (timer query)
   drawCalls: number;
   triangles: number;
+  lines: number;
+  points: number;
   textures: number;
   geometries: number;
   programs: number;
   jsHeapMB: number;
   jsHeapLimitMB: number;
+  texBytes: number; // estimated GPU texture memory — dominated by the 3D volume
+  steps: number; // ray-march step budget (uSteps uniform)
+  volumePixels: number; // device pixels the ray-march box covers this frame
+  viewports: number; // viewports drawn this frame (1, or 4 in the MPR grid)
+  drawW: number; // drawing-buffer size in device pixels
+  drawH: number;
+  dpr: number; // renderer pixel ratio
 }
 
 /** Result of mapping a pointer in a 2D MPR viewport to slice positions. */
@@ -225,7 +235,7 @@ export class VolumeViewer {
     this.layoutCameras(this.container.clientWidth, this.container.clientHeight);
   };
 
-  // --- Performance instrumentation (polled by the StatsPanel overlay).
+  // --- Performance instrumentation (polled by the ScenePerf overlay).
   private gl: WebGL2RenderingContext;
   private timerExt: TimerExt | null = null;
   private gpuQuery: WebGLQuery | null = null;
@@ -235,15 +245,25 @@ export class VolumeViewer {
   readonly gpuTimingSupported: boolean;
   readonly stats: ViewerStats = {
     fps: 0,
+    frameMs: 0,
     cpuMs: 0,
     gpuMs: 0,
     drawCalls: 0,
     triangles: 0,
+    lines: 0,
+    points: 0,
     textures: 0,
     geometries: 0,
     programs: 0,
     jsHeapMB: 0,
     jsHeapLimitMB: 0,
+    texBytes: 0,
+    steps: 0,
+    volumePixels: 0,
+    viewports: 1,
+    drawW: 0,
+    drawH: 0,
+    dpr: 1,
   };
 
   constructor(private container: HTMLElement) {
@@ -388,7 +408,7 @@ export class VolumeViewer {
   }
 
   /** Build the GPU 3D texture + geometry for a freshly parsed volume. */
-  setVolume(vol: NiftiVolume) {
+  setVolume(vol: Volume) {
     this.disposeVolumeObjects();
 
     // --- Upload voxels as a single-channel R8 3D texture.
@@ -401,17 +421,20 @@ export class VolumeViewer {
     tex.unpackAlignment = 1; // R8 rows aren't 4-byte aligned for odd widths
     tex.needsUpdate = true;
     this.texture = tex;
+    // Estimated GPU texture footprint: one R8 byte per voxel. This dwarfs every
+    // other texture in the scene (gizmo labels), so it's the figure worth showing.
+    this.stats.texBytes = vol.nx * vol.ny * vol.nz;
 
     // --- Physical box size = voxel count * spacing, normalized so the largest
     // axis = 1. This is what gives the brain its correct anatomical proportions.
-    const sp = vol.header.pixdim;
-    const phys = new THREE.Vector3(vol.nx * sp[1], vol.ny * sp[2], vol.nz * sp[3]);
+    const sp = vol.spacing;
+    const phys = new THREE.Vector3(vol.nx * sp[0], vol.ny * sp[1], vol.nz * sp[2]);
     const maxDim = Math.max(phys.x, phys.y, phys.z);
     this.boxSize.copy(phys).divideScalar(maxDim);
     this.maxDimMm = maxDim; // 1 object-space unit == maxDim mm (uniform)
     this.mprZoom = 1;
 
-    this.spacing.set(sp[1], sp[2], sp[3]);
+    this.spacing.set(sp[0], sp[1], sp[2]);
     this.volumeMat.uniforms.uData.value = tex;
     this.volumeMat.uniforms.uTexel.value = new THREE.Vector3(1 / vol.nx, 1 / vol.ny, 1 / vol.nz);
     this.volumeMat.uniforms.uBoxSize.value = this.boxSize;
@@ -497,7 +520,7 @@ export class VolumeViewer {
     });
 
     this.layoutCameras(this.container.clientWidth, this.container.clientHeight);
-    this.buildGizmo(faceLabelsFromAffine(vol.header.affine)); // anatomical labels from the affine
+    this.buildGizmo(faceLabelsFromAffine(vol.affine)); // anatomical labels from the affine
 
     // Re-apply the current UI state so the freshly built objects get the right
     // visibility/uniforms even if no control changes to trigger applyParams next.
@@ -887,6 +910,8 @@ export class VolumeViewer {
     r.info.reset(); // we disabled autoReset; accumulate across viewports
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
+    const dpr2 = this.renderer.getPixelRatio() ** 2; // device pixels per CSS pixel²
+    const volVisible = this.volumeMesh?.visible ?? false;
 
     // Single orthogonal plane filling the screen (phone top-bar views). No
     // orientation cube — it's a 2D read, not a 3D orbit.
@@ -895,6 +920,8 @@ export class VolumeViewer {
       r.setScissorTest(false);
       r.setViewport(0, 0, w, h);
       r.render(this.scene, single);
+      this.stats.viewports = 1;
+      this.stats.volumePixels = 0; // single-plane ortho cams don't see the volume layer
       return;
     }
 
@@ -903,6 +930,8 @@ export class VolumeViewer {
       r.setViewport(0, 0, w, h);
       r.render(this.scene, this.camera);
       this.renderGizmo(w);
+      this.stats.viewports = 1;
+      this.stats.volumePixels = volVisible ? w * h * dpr2 : 0;
       return;
     }
 
@@ -925,6 +954,8 @@ export class VolumeViewer {
     }
     r.setScissorTest(false);
     this.renderGizmo(w); // bottom-right corner = inside the 3D quadrant
+    this.stats.viewports = 4;
+    this.stats.volumePixels = volVisible ? rw * bh * dpr2 : 0; // volume fills the 3D quadrant only
   }
 
   private animate() {
@@ -932,8 +963,14 @@ export class VolumeViewer {
 
     const now = performance.now();
     if (this.lastTs) {
-      const inst = 1000 / Math.max(now - this.lastTs, 0.001);
-      this.stats.fps += (inst - this.stats.fps) * 0.1; // exponential smoothing
+      const dt = now - this.lastTs;
+      // Skip implausibly long gaps (tab backgrounded / rAF throttled): they're a
+      // paused loop, not a slow render, and would otherwise tank the smoothed FPS
+      // on resume and poison the ScenePerf frame-time stats.
+      if (dt < 300) {
+        this.stats.frameMs = dt; // raw — ScenePerf derives avg/min/1%-low from it
+        this.stats.fps += (1000 / Math.max(dt, 0.001) - this.stats.fps) * 0.1; // smoothed
+      }
     }
     this.lastTs = now;
 
@@ -978,9 +1015,16 @@ export class VolumeViewer {
     const info = this.renderer.info;
     this.stats.drawCalls = info.render.calls;
     this.stats.triangles = info.render.triangles;
+    this.stats.lines = info.render.lines;
+    this.stats.points = info.render.points;
     this.stats.textures = info.memory.textures;
     this.stats.geometries = info.memory.geometries;
     this.stats.programs = info.programs ? info.programs.length : 0;
+    this.stats.steps = this.volumeMat.uniforms.uSteps.value as number;
+    const cv = this.renderer.domElement;
+    this.stats.drawW = cv.width;
+    this.stats.drawH = cv.height;
+    this.stats.dpr = this.renderer.getPixelRatio();
     const mem = (
       performance as unknown as {
         memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number };

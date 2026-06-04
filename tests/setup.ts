@@ -23,6 +23,15 @@ if (!window.matchMedia) {
     }) as unknown as MediaQueryList;
 }
 
+// jsdom has no ResizeObserver; ScenePerf observes its canvas to size the graph.
+if (!window.ResizeObserver) {
+  window.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
+
 // A no-op 2D context: every method is a function, measureText returns a width,
 // getImageData returns an empty buffer. Enough for histogram/ruler effects.
 const stub2d = new Proxy(

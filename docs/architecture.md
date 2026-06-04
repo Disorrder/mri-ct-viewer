@@ -37,7 +37,7 @@ src/
 
   components/              # React presentation
     InfoPanel.tsx          #   live NIfTI-header readout
-    StatsPanel.tsx         #   FPS / CPU / GPU / RAM overlay
+    ScenePerf.tsx          #   FPS / CPU / GPU / RAM perf overlay (compact + full)
     IntensityPanel.tsx     #   histogram + colorbar legend
     LoadBar.tsx            #   determinate progress bar
     DropOverlay.tsx        #   drag-and-drop hint
