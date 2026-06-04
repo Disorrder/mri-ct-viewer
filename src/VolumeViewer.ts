@@ -47,7 +47,7 @@ const GIZMO_EDGE = new THREE.Color(0x4a4f59);
 const GIZMO_HOVER = new THREE.Color(0x5aa2ff);
 
 /** Anatomical labels (+/-) for an object axis, from its world (RAS) direction. */
-function axisAnatomy(col: [number, number, number]): [string, string] {
+export function axisAnatomy(col: [number, number, number]): [string, string] {
   const a = [Math.abs(col[0]), Math.abs(col[1]), Math.abs(col[2])];
   const k = a[0] >= a[1] && a[0] >= a[2] ? 0 : a[1] >= a[2] ? 1 : 2; // dominant RAS axis
   const [pos, neg] = RAS_PAIRS[k];
@@ -55,7 +55,7 @@ function axisAnatomy(col: [number, number, number]): [string, string] {
 }
 
 /** Face labels in BoxGeometry order [+X,-X,+Y,-Y,+Z,-Z] from the voxel->world affine. */
-function faceLabelsFromAffine(affine: number[][]): string[] {
+export function faceLabelsFromAffine(affine: number[][]): string[] {
   const col = (j: number): [number, number, number] => [affine[0][j], affine[1][j], affine[2][j]];
   const [xp, xn] = axisAnatomy(col(0));
   const [yp, yn] = axisAnatomy(col(1));
@@ -86,7 +86,7 @@ function makeLabelTexture(text: string): THREE.CanvasTexture {
 }
 
 /** Outward geometric normal of triangle (a,b,c). */
-function triNormal(a: number[], b: number[], c: number[]): number[] {
+export function triNormal(a: number[], b: number[], c: number[]): number[] {
   const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
   const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
   return [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
@@ -102,7 +102,7 @@ function triNormal(a: number[], b: number[], c: number[]): number[] {
  * Every facet's geometric normal points along its snap direction, so a click
  * raycast yields the camera direction directly (corners -> diagonal views).
  */
-function buildViewCubeGeometry(
+export function buildViewCubeGeometry(
   H: number,
   G: number,
 ): { geometry: THREE.BufferGeometry; kinds: ("face" | "bevel")[] } {
@@ -258,6 +258,12 @@ export class VolumeViewer {
   private crosshairs: THREE.LineSegments[] = []; // [sagittal, coronal, axial]
   private crossMat: THREE.LineBasicMaterial;
   private layout: Layout = "3D";
+  // Last params pushed from the UI. setVolume rebuilds the scene objects with
+  // their default visibility (planes default to visible), so it re-applies these
+  // at the end — otherwise a load that doesn't change any control (e.g. the new
+  // volume's auto-window equals the current one, so leva skips the update) would
+  // leave the freshly built slice planes showing in Volume mode.
+  private lastParams: ViewerParams | null = null;
 
   // --- Orientation cube (ViewCube): rotates with the camera; click a face to
   // snap the 3D camera to that anatomical view (rotation only, no translation).
@@ -607,6 +613,10 @@ export class VolumeViewer {
 
     this.layoutCameras(this.container.clientWidth, this.container.clientHeight);
     this.buildGizmo(faceLabelsFromAffine(vol.header.affine)); // anatomical labels from the affine
+
+    // Re-apply the current UI state so the freshly built objects get the right
+    // visibility/uniforms even if no control changes to trigger applyParams next.
+    if (this.lastParams) this.applyParams(this.lastParams);
   }
 
   /** Fit each orthographic camera's frustum to its slice plane (no distortion). */
@@ -776,6 +786,7 @@ export class VolumeViewer {
   }
 
   applyParams(p: ViewerParams) {
+    this.lastParams = p;
     this.renderer.setClearColor(new THREE.Color(p.background), 1);
     this.layout = p.layout;
     const mpr = p.layout === "MPR";
