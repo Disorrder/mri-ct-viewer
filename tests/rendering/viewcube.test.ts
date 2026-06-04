@@ -3,6 +3,7 @@ import {
   axisAnatomy,
   buildViewCubeGeometry,
   faceLabelsFromAffine,
+  homeCameraDirs,
   triNormal,
 } from "../../src/rendering/viewcube";
 
@@ -58,6 +59,46 @@ describe("faceLabelsFromAffine", () => {
     ];
     // col0 = (0,0,1) -> S/I, col1 = (1,0,0) -> R/L, col2 = (0,1,0) -> A/P
     expect(faceLabelsFromAffine(permuted)).toEqual(["S", "I", "R", "L", "A", "P"]);
+  });
+});
+
+describe("homeCameraDirs", () => {
+  const identity = [
+    [1, 0, 0, 0],
+    [0, 1, 0, 0],
+    [0, 0, 1, 0],
+    [0, 0, 0, 1],
+  ];
+  const near = (a: number[], b: number[]) => {
+    for (let i = 0; i < a.length; i++) expect(a[i]).toBeCloseTo(b[i], 6);
+  };
+
+  it("puts the camera on the anterior+superior+right side of an RAS volume", () => {
+    const { dir, up } = homeCameraDirs(identity);
+    // RAS [0.6, 1, 0.5] normalized — anterior dominant, looking the patient in the face.
+    const n = Math.hypot(0.6, 1, 0.5);
+    near(dir, [0.6 / n, 1 / n, 0.5 / n]);
+    expect(dir[1]).toBeGreaterThan(0); // anterior side, not behind the head
+    near(up, [0, 0, 1]); // up follows superior
+  });
+
+  it("returns unit vectors", () => {
+    const { dir, up } = homeCameraDirs(identity);
+    expect(Math.hypot(...dir)).toBeCloseTo(1, 6);
+    expect(Math.hypot(...up)).toBeCloseTo(1, 6);
+  });
+
+  it("follows the affine so it still faces anterior when axes are flipped/scaled", () => {
+    // Voxel +Y points posterior (-A), +Z points inferior (-S), with 2mm spacing.
+    const flipped = [
+      [2, 0, 0, 0],
+      [0, -2, 0, 0],
+      [0, 0, -2, 0],
+      [0, 0, 0, 1],
+    ];
+    const { dir, up } = homeCameraDirs(flipped);
+    expect(dir[1]).toBeLessThan(0); // camera swings to box -Y, which is the anterior side
+    near(up, [0, 0, -1]); // superior is box -Z here, so up flips to match
   });
 });
 

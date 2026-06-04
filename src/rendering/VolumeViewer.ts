@@ -7,9 +7,10 @@
  * ---------------------
  * We render in *voxel-axis space*: the volume's i/j/k axes map to the box's
  * X/Y/Z. The full voxel->world (RAS) affine from the header is shown in the UI
- * panel but not baked into geometry — keeping the math transparent. The camera
- * "up" is set to +Z because for these brain scans the k axis is superior
- * (top of head).
+ * panel but not baked into geometry — keeping the math transparent. The default
+ * camera framing (direction + "up") is derived from that affine so the start
+ * view faces the patient's anterior (the face), whatever orientation the volume
+ * is stored in — see homeCameraDirs.
  */
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -23,6 +24,7 @@ import {
   GIZMO_EDGE,
   GIZMO_FACE,
   GIZMO_HOVER,
+  homeCameraDirs,
   makeLabelTexture,
   orientGizmoLabel,
 } from "./viewcube";
@@ -39,6 +41,7 @@ const C_CORONAL = 0xf5c542;
 const C_SAGITTAL = 0xff5a3c;
 
 const GIZMO_PX = 128; // on-screen size of the corner orientation cube
+const HOME_DIST = 2.7; // camera distance for the default framing (object-space units)
 
 /** Subset of EXT_disjoint_timer_query_webgl2 we use for real GPU timing. */
 interface TimerExt {
@@ -114,6 +117,12 @@ export class VolumeViewer {
   private controls: OrbitControls;
   private ro: ResizeObserver;
   private raf = 0;
+
+  // Default 3D framing (a face-on three-quarter view), in box/voxel-axis space.
+  // Derived from the volume's affine in setVolume so it tracks anatomy; resetView
+  // and the initial view both snap the camera back to it.
+  private homeDir = new THREE.Vector3();
+  private homeUp = new THREE.Vector3(0, 0, 1);
 
   private texture: THREE.Data3DTexture | null = null;
   private volumeMesh: THREE.Mesh | null = null;
@@ -291,8 +300,16 @@ export class VolumeViewer {
       0.01,
       100,
     );
-    this.camera.up.set(0, 0, 1); // k axis (superior) points up
-    this.camera.position.set(1.7, -1.8, 1.1);
+    // Provisional framing for an identity (RAS) affine; setVolume recomputes it
+    // from the real affine once a volume loads so the start view faces the patient.
+    this.setHomeFromAffine([
+      [1, 0, 0, 0],
+      [0, 1, 0, 0],
+      [0, 0, 1, 0],
+      [0, 0, 0, 1],
+    ]);
+    this.camera.up.copy(this.homeUp);
+    this.camera.position.copy(this.homeDir).multiplyScalar(HOME_DIST);
 
     // The 3D (perspective) camera also sees the slice-plane layers, so the
     // fullscreen "Slices" mode works; crosshair layers (4-6) stay off it.
@@ -521,6 +538,11 @@ export class VolumeViewer {
 
     this.layoutCameras(this.container.clientWidth, this.container.clientHeight);
     this.buildGizmo(faceLabelsFromAffine(vol.affine)); // anatomical labels from the affine
+
+    // Frame the new volume face-on: derive the default view from its affine and
+    // snap the 3D camera there, so loading a dataset starts looking at the face.
+    this.setHomeFromAffine(vol.affine);
+    this.resetView();
 
     // Re-apply the current UI state so the freshly built objects get the right
     // visibility/uniforms even if no control changes to trigger applyParams next.
@@ -887,10 +909,18 @@ export class VolumeViewer {
     };
   }
 
-  /** Reset camera framing to a default 3/4 view. */
+  /** Store the default framing for this volume's orientation (used by resetView). */
+  private setHomeFromAffine(affine: number[][]) {
+    const { dir, up } = homeCameraDirs(affine);
+    this.homeDir.set(dir[0], dir[1], dir[2]);
+    this.homeUp.set(up[0], up[1], up[2]);
+  }
+
+  /** Reset camera framing to the default face-on three-quarter view. */
   resetView() {
-    this.camera.position.set(1.7, -1.8, 1.1);
     this.controls.target.set(0, 0, 0);
+    this.camera.up.copy(this.homeUp);
+    this.camera.position.copy(this.controls.target).addScaledVector(this.homeDir, HOME_DIST);
     this.controls.update();
   }
 

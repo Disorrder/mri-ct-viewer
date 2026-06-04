@@ -45,6 +45,41 @@ export function faceLabelsFromAffine(affine: number[][]): string[] {
   return [xp, xn, yp, yn, zp, zn];
 }
 
+// The default "portrait" framing, expressed in anatomical RAS terms: mostly
+// anterior (looking the patient in the face), tilted up from above (superior)
+// and swung round to one side (the patient's right) for a three-quarter view.
+const HOME_VIEW_RAS: readonly [number, number, number] = [0.6, 1.0, 0.5]; // R, A, S
+
+/** Unit box-space (voxel-axis) coordinates of a world/RAS direction. */
+function rasToBox(
+  affine: number[][],
+  ras: readonly [number, number, number],
+): [number, number, number] {
+  // Box axis j points along the (normalized) affine column j in RAS, so a world
+  // direction's box coordinates are its dot products with those unit columns.
+  const out: [number, number, number] = [0, 0, 0];
+  for (let j = 0; j < 3; j++) {
+    const c = [affine[0][j], affine[1][j], affine[2][j]];
+    const len = Math.hypot(c[0], c[1], c[2]) || 1;
+    out[j] = (c[0] * ras[0] + c[1] * ras[1] + c[2] * ras[2]) / len;
+  }
+  const len = Math.hypot(out[0], out[1], out[2]) || 1;
+  return [out[0] / len, out[1] / len, out[2] / len];
+}
+
+/**
+ * Default camera direction + up in box (voxel-axis) space, derived from the
+ * voxel->world affine so the start view faces the patient's anterior (the face)
+ * from slightly above and to the side, whatever orientation the volume is stored
+ * in. Both are unit vectors; the caller scales `dir` by the view distance.
+ */
+export function homeCameraDirs(affine: number[][]): {
+  dir: [number, number, number];
+  up: [number, number, number];
+} {
+  return { dir: rasToBox(affine, HOME_VIEW_RAS), up: rasToBox(affine, [0, 0, 1]) };
+}
+
 /** A dark anatomical word on a transparent tile, auto-fit to fit the cube face. */
 export function makeLabelTexture(text: string): THREE.CanvasTexture {
   const s = 256;
