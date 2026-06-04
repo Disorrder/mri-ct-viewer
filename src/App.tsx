@@ -171,7 +171,9 @@ export default function App() {
           // we can write from the neutral 8-bit volume — see lib/exportClip.ts),
           // so it works for DICOM sources too. Leva buttons can't be conditionally
           // rendered, so when the cut is off we export the whole volume instead.
-          "export cut (.nii)": button((get) => {
+          // NB: keep the label free of "." — Leva splits keys on dots into folders,
+          // which would wrap this button in a stray "export cut (" subheading.
+          "export cut (nii)": button((get) => {
             const v = volumeRef.current;
             if (!v) return;
             const box = get("clip.clipEnabled")
