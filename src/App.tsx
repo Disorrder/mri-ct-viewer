@@ -7,17 +7,19 @@ import {
   useRef,
   useState,
 } from "react";
-import { COLORMAPS, SLAB_PROJECTIONS, TECHNIQUES } from "./glsl";
 import { IntensityPanel } from "./IntensityPanel";
 import { loadNiftiFromUrl, type NiftiVolume, parseNifti } from "./nifti";
-import { StatsPanel } from "./StatsPanel";
 import {
+  COLORMAPS,
   type Layout,
   PLANE_COLORS,
+  SLAB_PROJECTIONS,
   type SlicePick,
+  TECHNIQUES,
   type ViewerParams,
   VolumeViewer,
-} from "./VolumeViewer";
+} from "./rendering";
+import { StatsPanel } from "./StatsPanel";
 
 /** The sample volumes served from /public. */
 const DATASETS: Record<string, { url: string; label: string }> = {

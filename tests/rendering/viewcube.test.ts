@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
-// These pure helpers currently live in VolumeViewer.ts; the refactor moves them
-// to src/rendering/viewcube.ts and this import path follows.
 import {
   axisAnatomy,
   buildViewCubeGeometry,
   faceLabelsFromAffine,
   triNormal,
-} from "../../src/VolumeViewer";
+} from "../../src/rendering/viewcube";
 
 describe("triNormal", () => {
   it("returns the cross product of the two triangle edges", () => {

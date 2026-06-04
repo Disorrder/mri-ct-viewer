@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { VolumeViewer } from "./VolumeViewer";
+import type { VolumeViewer } from "./rendering";
 
 /**
  * Live performance overlay: FPS (+ sparkline), CPU frame time, real GPU time
