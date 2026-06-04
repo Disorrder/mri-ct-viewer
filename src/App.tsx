@@ -7,6 +7,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { toViewerParams } from "./config/controls";
+import { DATASETS } from "./config/datasets";
 import { IntensityPanel } from "./IntensityPanel";
 import { formatCompact } from "./lib/format";
 import { drawRuler } from "./lib/ruler";
@@ -18,17 +20,9 @@ import {
   SLAB_PROJECTIONS,
   type SlicePick,
   TECHNIQUES,
-  type ViewerParams,
   VolumeViewer,
 } from "./rendering";
 import { StatsPanel } from "./StatsPanel";
-
-/** The sample volumes served from /public. */
-const DATASETS: Record<string, { url: string; label: string }> = {
-  chris_t1: { url: "/chris_t1.nii.gz", label: "MRI T1 — brain (uint8)" },
-  mni152: { url: "/mni152.nii.gz", label: "MRI — MNI152 template (uint8)" },
-  ct_abdo: { url: "/CT_Abdo.nii.gz", label: "CT — abdomen (int16, HU)" },
-};
 
 /** The four fullscreen views the phone top bar switches between. */
 const SINGLE_PLANES = ["axial", "coronal", "sagittal"] as const;
@@ -358,42 +352,7 @@ export default function App() {
 
   // --- Push every control change into the viewer.
   useEffect(() => {
-    const mapped: ViewerParams = {
-      layout: params.layout as ViewerParams["layout"],
-      mode: params.mode as ViewerParams["mode"],
-      technique: TECHNIQUES.indexOf(params.technique as (typeof TECHNIQUES)[number]),
-      colormap: COLORMAPS.indexOf(params.colormap as (typeof COLORMAPS)[number]),
-      steps: params.steps,
-      windowLow: (params.window as number[])[0],
-      windowHigh: (params.window as number[])[1],
-      iso: params.iso,
-      density: params.density,
-      sliceX: params.sliceX,
-      sliceY: params.sliceY,
-      sliceZ: params.sliceZ,
-      showX: params.showX,
-      showY: params.showY,
-      showZ: params.showZ,
-      clipEnabled: params.clipEnabled,
-      clipMin: [
-        (params.clipX as number[])[0],
-        (params.clipY as number[])[0],
-        (params.clipZ as number[])[0],
-      ],
-      clipMax: [
-        (params.clipX as number[])[1],
-        (params.clipY as number[])[1],
-        (params.clipZ as number[])[1],
-      ],
-      clipInvert: params.clipInvert,
-      thickness: params.thickness,
-      slabProjection: SLAB_PROJECTIONS.indexOf(
-        params.slabMode as (typeof SLAB_PROJECTIONS)[number],
-      ),
-      autoRotate: params.autoRotate,
-      background: params.background,
-    };
-    viewerRef.current?.applyParams(mapped);
+    viewerRef.current?.applyParams(toViewerParams(params));
   }, [params]);
 
   return (
