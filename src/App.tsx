@@ -418,7 +418,15 @@ export default function App() {
           />
         )}
         {viewer && params.showPerf && (
-          <ScenePerf viewer={viewer} detail={params.perfDetail as "compact" | "full"} />
+          <ScenePerf
+            viewer={viewer}
+            detail={params.perfDetail as "compact" | "full"}
+            // Clicking the FPS number flips detail through the Leva control, so the
+            // "scene perf" select mirrors it (and stays available to switch directly).
+            onToggleDetail={() =>
+              set({ perfDetail: params.perfDetail === "compact" ? "full" : "compact" })
+            }
+          />
         )}
         {volume && !progress && (
           <IntensityPanel

@@ -173,6 +173,20 @@ body,
   line-height: 1;
   color: #5ef08a;
   font-variant-numeric: tabular-nums;
+  /* The HUD is pointer-events:none; this number opts back in so it can toggle
+     compact ⇄ full detail on click. */
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.perf-fps:hover {
+  filter: brightness(1.15);
+}
+
+.perf-fps:focus-visible {
+  outline: 1px solid rgba(158, 203, 255, 0.7);
+  outline-offset: 2px;
 }
 
 .perf-unit {

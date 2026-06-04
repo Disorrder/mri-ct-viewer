@@ -4,7 +4,8 @@ import type { VolumeViewer } from "../rendering";
 
 /**
  * Live performance overlay for the Three.js scene. Two layouts, chosen by the
- * `detail` prop (driven from the Leva "scene perf" folder):
+ * `detail` prop (driven from the Leva "scene perf" folder, or by clicking the FPS
+ * number — see `onToggleDetail`):
  *
  *  - "compact": FPS + sparkline + a CPU/GPU/RAM strip (absolute + % each).
  *  - "full": adds frame-rate stability (avg/min/1%-low), estimated VRAM, and the
@@ -52,9 +53,13 @@ function Row({
 export const ScenePerf = memo(function ScenePerf({
   viewer,
   detail,
+  onToggleDetail,
 }: {
   viewer: VolumeViewer;
   detail: Detail;
+  /** Flip compact ⇄ full. Wired to a click on the FPS number; stays in sync with
+   *  the Leva "detail" select, which remains the other way to switch. */
+  onToggleDetail?: () => void;
 }) {
   const full = detail === "full";
 
@@ -221,7 +226,21 @@ export const ScenePerf = memo(function ScenePerf({
   return (
     <div className="scene-perf" data-detail={detail}>
       <div className="perf-top">
-        <span className="perf-fps" ref={r.fps}>
+        <span
+          className="perf-fps"
+          ref={r.fps}
+          // The container is pointer-events:none; this number opts back in (see CSS).
+          onClick={onToggleDetail}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onToggleDetail?.();
+            }
+          }}
+          role={onToggleDetail ? "button" : undefined}
+          tabIndex={onToggleDetail ? 0 : undefined}
+          title={onToggleDetail ? (full ? "compact view" : "full view") : undefined}
+        >
           –
         </span>
         <span className="perf-unit">FPS</span>
