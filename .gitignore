@@ -4,5 +4,11 @@ coverage
 *.local
 .DS_Store
 .npm-cache
+.supabase-token
+.vite
 *.tsbuildinfo
 .claude/settings.local.json
+
+# Sample volumes — served from object storage in prod (VITE_DATA_BASE), not shipped in the repo
+public/nifti-*
+public/dicom-*

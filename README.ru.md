@@ -166,16 +166,38 @@ npm run dev      # http://localhost:5173
 
 ## Данные и источники
 
-Сэмплы NIfTI взяты из проекта **NiiVue**
+Сэмплы уже лежат в `public/` — чтобы запустить демку, скачивать ничего не нужно.
+Ссылки ниже — это откуда они взяты, если нужны оригиналы или хочется подставить
+данные в полном разрешении.
+
+### NIfTI
+
+Из набора демок проекта **NiiVue**
 ([niivue/niivue-demo-images](https://github.com/niivue/niivue-demo-images),
 лицензия в репозитории) — намеренно низкого разрешения, чтобы быстро грузились:
 
-- `chris_t1.nii.gz` — индивидуальная T1-МРТ головы (uint8).
-- `mni152.nii.gz` — стандартный шаблон ICBM 152 (усреднённый мозг, uint8).
-- `CT_Abdo.nii.gz` — КТ брюшной полости (int16, HU; провенанс — Slicer3D / S. Pieper).
-  Хорошо смотрится как изоповерхность (порог ≈ кость → виден скелет).
+| Файл | Что | Скачать |
+|------|-----|---------|
+| `nifti-mri-brain/chris_t1.nii.gz` | индивидуальная T1-МРТ головы (uint8) | [raw](https://github.com/niivue/niivue-demo-images/raw/main/chris_t1.nii.gz) |
+| `nifti-mri-mni152/mni152.nii.gz` | стандартный шаблон ICBM 152, усреднённый мозг (uint8) | [raw](https://github.com/niivue/niivue-demo-images/raw/main/mni152.nii.gz) |
+| `nifti-ct-abdomen/CT_Abdo.nii.gz` | КТ брюшной полости (int16, HU) | [raw](https://github.com/niivue/niivue-demo-images/raw/main/CT_Abdo.nii.gz) |
 
-Спека формата: <https://nifti.nimh.nih.gov/nifti-1>.
+КТ хорошо смотрится как изоповерхность (порог ≈ кость → виден скелет). Спека
+формата: <https://nifti.nimh.nih.gov/nifti-1>.
+
+### DICOM
+
+`dicom-ct-dental/` — реальная дентальная конусно-лучевая КТ (Imaging Sciences
+International **i-CAT**) из бесплатной библиотеки сэмплов **Medimodel**, кейс
+"Class 3 malocclusion" (анонимизировано, свободно для обучения и исследований):
+
+<https://medimodel.com/sample-dicom-files/class-3-malocclusion/>
+
+Оригинал — 518 срезов DICOM с JPEG-сжатием (~425 МБ), которые этот вьюер читать
+не умеет. В репозитории лежит обрезанная, разжатая и уменьшенная версия (80
+срезов, 256×256, ~10 МБ), подготовленная скриптом
+[`scripts/prep-icat-sample.py`](scripts/prep-icat-sample.py). Провенанс и точные
+шаги, как её пересобрать: [`public/dicom-ct-dental/SOURCE.md`](public/dicom-ct-dental/SOURCE.md).
 
 Стек: Three.js · React 19 · Vite 6 · Leva. Без библиотек-парсеров — NIfTI и gzip
 разбираются вручную специально ради наглядности.

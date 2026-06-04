@@ -96,12 +96,34 @@ This is a learning demo, not clinical software:
 
 ## Data & sources
 
-Sample NIfTI volumes come from the **NiiVue** demo set
-([niivue/niivue-demo-images](https://github.com/niivue/niivue-demo-images)) —
-deliberately low resolution so they load fast:
+The bundled samples are already in `public/` — nothing to download to run the
+demo. The links below are where each one comes from, if you want the originals
+or to swap in full-resolution data.
 
-- `chris_t1.nii.gz` — individual T1 head MRI (uint8).
-- `mni152.nii.gz` — ICBM 152 template (averaged brain, uint8).
-- `CT_Abdo.nii.gz` — abdominal CT (int16, Hounsfield units).
+### NIfTI
+
+From the **NiiVue** demo set
+([niivue/niivue-demo-images](https://github.com/niivue/niivue-demo-images),
+licence in the repo) — deliberately low resolution so they load fast:
+
+| File | What | Download |
+|------|------|----------|
+| `nifti-mri-brain/chris_t1.nii.gz` | individual T1 head MRI (uint8) | [raw](https://github.com/niivue/niivue-demo-images/raw/main/chris_t1.nii.gz) |
+| `nifti-mri-mni152/mni152.nii.gz` | ICBM 152 template, averaged brain (uint8) | [raw](https://github.com/niivue/niivue-demo-images/raw/main/mni152.nii.gz) |
+| `nifti-ct-abdomen/CT_Abdo.nii.gz` | abdominal CT (int16, Hounsfield units) | [raw](https://github.com/niivue/niivue-demo-images/raw/main/CT_Abdo.nii.gz) |
 
 Format spec: <https://nifti.nimh.nih.gov/nifti-1>.
+
+### DICOM
+
+`dicom-ct-dental/` — a real dental cone-beam CT (Imaging Sciences International
+**i-CAT**), from the **Medimodel** free sample library, "Class 3 malocclusion"
+(anonymised, free for education and research):
+
+<https://medimodel.com/sample-dicom-files/class-3-malocclusion/>
+
+The original is 518 slices of JPEG-compressed DICOM (~425 MB) which this viewer
+can't read. The bundled copy is a trimmed, decompressed, downsampled preview
+(80 slices, 256×256, ~10 MB) prepared with
+[`scripts/prep-icat-sample.py`](scripts/prep-icat-sample.py). Provenance and the
+exact steps to regenerate it: [`public/dicom-ct-dental/SOURCE.md`](public/dicom-ct-dental/SOURCE.md).
