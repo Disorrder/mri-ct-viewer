@@ -13,13 +13,13 @@ const GRAPH_W = 150;
 const GRAPH_H = 38;
 const MAX_FPS = 120;
 
-function fpsColor(fps: number): string {
+export function fpsColor(fps: number): string {
   if (fps >= 55) return "#5ef08a";
   if (fps >= 30) return "#f0d24e";
   return "#f0644e";
 }
 
-function shortGpu(name: string): string {
+export function shortGpu(name: string): string {
   // "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, ...)" -> "Apple M1 Max"
   const m = name.match(/ANGLE \(([^,]+),\s*([^,]+)/);
   const raw = m ? m[2] : name;
