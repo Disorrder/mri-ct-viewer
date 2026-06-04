@@ -39,3 +39,31 @@ header panel:
   the whole volume.
 - **Orthogonal slices** — three perpendicular planes (sagittal / coronal /
   axial), the way scans are actually read in the clinic.
+
+## Loading DICOM in this viewer
+
+The reader in [`src/dicom`](../src/dicom) is hand-written and dependency-free,
+the same spirit as [`src/nifti`](../src/nifti). It decodes a DICOM dataset into
+the exact same `Volume` the renderer already consumes, so once parsed a DICOM and
+a NIfTI volume are indistinguishable downstream.
+
+What it handles:
+
+- **Uncompressed transfer syntaxes** — Implicit VR Little Endian, Explicit VR
+  Little/Big Endian. Compressed pixel data (JPEG / JPEG-LS / JPEG 2000 / RLE) is
+  out of scope — the parser throws a clear error naming the syntax.
+- **Two import shapes** — a single **multi-frame** file (enhanced DICOM, the whole
+  stack in one buffer), and a **series**: a folder of one-file-per-slice. Drag a
+  folder onto the page and the slices are sorted by `ImagePositionPatient` along
+  the slice normal (DICOM doesn't promise file order), with the inter-slice
+  spacing inferred from the positions.
+- **Geometry** — `PixelSpacing` + `SliceThickness`/`SpacingBetweenSlices` become
+  the voxel spacing; `ImageOrientationPatient` + `ImagePositionPatient` build the
+  voxel→world affine (converted from DICOM's LPS to the viewer's RAS).
+- **Intensity** — `RescaleSlope`/`RescaleIntercept` give the display range (CT in
+  Hounsfield units); `WindowCenter`/`WindowWidth` are surfaced as the window hint.
+
+The bundled sample (`public/dicom-ct-dental/`) is a real dental cone-beam CT — a
+trimmed, downsampled, uncompressed copy of an i-CAT scan; see its
+[`SOURCE.md`](../public/dicom-ct-dental/SOURCE.md) for provenance and how it was
+prepared from the original (JPEG-compressed) series.
