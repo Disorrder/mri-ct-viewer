@@ -58,6 +58,7 @@ src/
     ruler.ts               #   nice cm steps, tick scheme, cm formatting, drawRuler
     format.ts              #   compact number formatting for the panels
     gpu.ts                 #   GPU-name shortening + FPS color thresholds
+    layout.ts              #   single-plane predicates + phone view tabs
 ```
 
 ## Data flow
