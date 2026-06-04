@@ -14,26 +14,20 @@ import {
 import { toViewerParams } from "./config/controls";
 import { DATASETS } from "./config/datasets";
 import { useMediaQuery } from "./hooks/useMediaQuery";
+import { useVolumeLoader } from "./hooks/useVolumeLoader";
 import { isOrtho, isSinglePlane } from "./lib/layout";
-import { loadNiftiFromUrl, type NiftiVolume, parseNifti } from "./nifti";
+import type { NiftiVolume } from "./nifti";
 import { COLORMAPS, SLAB_PROJECTIONS, type SlicePick, TECHNIQUES, VolumeViewer } from "./rendering";
 
 export default function App() {
   const mountRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<VolumeViewer | null>(null);
-  // Parsed volumes are cached, so a dataset is fetched at most once (lazy load).
-  const cacheRef = useRef<Map<string, NiftiVolume>>(new Map());
   const volumeRef = useRef<NiftiVolume | null>(null); // current volume, for Leva button closures
   const draggingRef = useRef(false); // pointer drag state for MPR crosshair
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const lockAxisRef = useRef<"h" | "v" | null>(null); // Shift-locked axis during a drag
   const [viewer, setViewer] = useState<VolumeViewer | null>(null);
   const [volume, setVolume] = useState<NiftiVolume | null>(null);
-  const [progress, setProgress] = useState<{ fraction: number; label: string } | null>({
-    fraction: 0,
-    label: "connecting",
-  });
-  const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   // Tablets (≤ 700px) start with the Leva panel collapsed; narrow phones (< 500px)
@@ -210,27 +204,9 @@ export default function App() {
     [set],
   );
 
-  // Load a user-dropped .nii / .nii.gz (our parser already takes an ArrayBuffer).
-  const loadLocalFile = useCallback(
-    async (file: File) => {
-      try {
-        setError(null);
-        setProgress({ fraction: 0.25, label: `reading ${file.name}` });
-        const buf = await file.arrayBuffer();
-        setProgress({ fraction: 0.6, label: `parsing ${file.name}` });
-        const vol = await parseNifti(buf);
-        setProgress({ fraction: 0.97, label: "building scene" });
-        await new Promise((r) => requestAnimationFrame(r));
-        applyVolume(vol);
-        setProgress({ fraction: 1, label: "ready" });
-        setTimeout(() => setProgress(null), 280);
-      } catch (e) {
-        setError(`${file.name}: ${e}`);
-        setProgress(null);
-      }
-    },
-    [applyVolume],
-  );
+  // Dataset loading (fetch + parse + cache + progress) and drag-and-drop live in
+  // a hook; applyVolume is the sink it calls for every parsed volume.
+  const { progress, error, loadFile } = useVolumeLoader(params.dataset, applyVolume);
 
   // --- Create the Three.js viewer once.
   useEffect(() => {
@@ -244,56 +220,6 @@ export default function App() {
       setViewer(null);
     };
   }, []);
-
-  // --- Lazily fetch + parse the selected dataset (cached after first load),
-  //     reporting download/decompress/parse/scene-build progress as we go.
-  useEffect(() => {
-    let cancelled = false;
-    const ds = DATASETS[params.dataset];
-
-    (async () => {
-      const cached = cacheRef.current.get(params.dataset);
-      if (cached) {
-        setError(null);
-        applyVolume(cached); // instant — no fetch, no progress bar
-        setProgress(null);
-        return;
-      }
-      try {
-        setError(null);
-        setProgress({ fraction: 0, label: "connecting" });
-        const vol = await loadNiftiFromUrl(ds.url, (p) => {
-          if (cancelled) return;
-          const mb = (b: number) => (b / 1048576).toFixed(1);
-          const label =
-            p.phase === "download"
-              ? p.total
-                ? `downloading  ${mb(p.loaded)} / ${mb(p.total)} MB`
-                : `downloading  ${mb(p.loaded)} MB`
-              : p.phase === "decompress"
-                ? "decompressing (gunzip)"
-                : "parsing header + voxels";
-          setProgress({ fraction: p.fraction, label });
-        });
-        if (cancelled) return;
-        cacheRef.current.set(params.dataset, vol);
-        setProgress({ fraction: 0.97, label: "building scene (GPU upload)" });
-        await new Promise((r) => requestAnimationFrame(r)); // let 97% paint first
-        if (cancelled) return;
-        applyVolume(vol);
-        setProgress({ fraction: 1, label: "ready" });
-        setTimeout(() => !cancelled && setProgress(null), 280);
-      } catch (e) {
-        if (cancelled) return;
-        setError(String(e));
-        setProgress(null);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [params.dataset, applyVolume]);
 
   // --- Dev-only handles so the scene can be poked from the console.
   useEffect(() => {
@@ -335,7 +261,7 @@ export default function App() {
           e.preventDefault();
           setDragActive(false);
           const f = e.dataTransfer.files?.[0];
-          if (f) loadLocalFile(f);
+          if (f) loadFile(f);
         }}
       >
         <div
