@@ -13,6 +13,7 @@ import {
 } from "./components";
 import { toViewerParams } from "./config/controls";
 import { DATASETS } from "./config/datasets";
+import { useMediaQuery } from "./hooks/useMediaQuery";
 import { isOrtho, isSinglePlane } from "./lib/layout";
 import { loadNiftiFromUrl, type NiftiVolume, parseNifti } from "./nifti";
 import { COLORMAPS, SLAB_PROJECTIONS, type SlicePick, TECHNIQUES, VolumeViewer } from "./rendering";
@@ -34,15 +35,11 @@ export default function App() {
   });
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [isMobile, setIsMobile] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches,
-  );
-  // Narrow phones get the top-bar + bottom-sheet layout (the Leva panel moves
-  // into a swipe-up sheet; views switch from the top bar instead of `layout`).
-  const [isPhone, setIsPhone] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(max-width: 500px)").matches,
-  );
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Tablets (≤ 700px) start with the Leva panel collapsed; narrow phones (< 500px)
+  // switch to the top-bar + bottom-sheet layout (controls move into a swipe-up sheet).
+  const isMobile = useMediaQuery("(max-width: 700px)");
+  const isPhone = useMediaQuery("(max-width: 500px)");
 
   const [params, set, get] = useControls(
     () => ({
@@ -306,28 +303,14 @@ export default function App() {
     }
   }, [set]);
 
-  // --- Collapse the controls panel by default on phones.
+  // --- Leaving phone width while on a single-plane view drops back to 3D ("MPR"
+  //     is the desktop grid) and closes the bottom sheet.
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 700px)");
-    const onChange = () => setIsMobile(mq.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-
-  // --- Track the phone breakpoint (top bar + bottom sheet). Leaving phone width
-  //     while on a single-plane view drops back to 3D ("MPR" is the desktop grid).
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 500px)");
-    const onChange = () => {
-      setIsPhone(mq.matches);
-      if (!mq.matches) {
-        setSheetOpen(false);
-        if (isSinglePlane(get("layout") as string)) set({ layout: "3D" });
-      }
-    };
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, [set, get]);
+    if (!isPhone) {
+      setSheetOpen(false);
+      if (isSinglePlane(get("layout") as string)) set({ layout: "3D" });
+    }
+  }, [isPhone, set, get]);
 
   // --- Push every control change into the viewer.
   useEffect(() => {
