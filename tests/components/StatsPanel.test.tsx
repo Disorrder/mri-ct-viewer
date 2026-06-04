@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { StatsPanel } from "../../src/components/StatsPanel";
 import type { VolumeViewer } from "../../src/rendering/VolumeViewer";
-import { StatsPanel } from "../../src/StatsPanel";
 
 // A lightweight stand-in for the renderer: StatsPanel only reads these fields.
 function stubViewer(overrides: Partial<VolumeViewer> = {}): VolumeViewer {

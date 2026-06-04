@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { IntensityPanel } from "../../src/IntensityPanel";
+import { IntensityPanel } from "../../src/components/IntensityPanel";
 import { parseNifti } from "../../src/nifti";
 import { makeNifti } from "../nifti/fixtures";
 

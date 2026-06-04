@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { fpsColor, shortGpu } from "./lib/gpu";
-import type { VolumeViewer } from "./rendering";
+import { fpsColor, shortGpu } from "../lib/gpu";
+import type { VolumeViewer } from "../rendering";
 
 /**
  * Live performance overlay: FPS (+ sparkline), CPU frame time, real GPU time
