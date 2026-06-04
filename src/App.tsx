@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { IntensityPanel } from "./IntensityPanel";
+import { formatCompact } from "./lib/format";
 import { drawRuler } from "./lib/ruler";
 import { loadNiftiFromUrl, type NiftiVolume, parseNifti } from "./nifti";
 import {
@@ -811,8 +812,7 @@ function LoadBar({ fraction, label }: { fraction: number; label: string }) {
 
 function InfoPanel({ volume, mode }: { volume: NiftiVolume; mode: string }) {
   const h = volume.header;
-  const fmt = (n: number) =>
-    Math.abs(n) >= 1000 || (n !== 0 && Math.abs(n) < 0.01) ? n.toExponential(2) : +n.toFixed(3);
+  const fmt = (n: number) => formatCompact(n);
   return (
     <div className="info">
       <h1>NIfTI-1 header</h1>

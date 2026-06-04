@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { formatCompact } from "./lib/format";
 import type { NiftiVolume } from "./nifti";
 import { colormapRGB } from "./rendering";
 
@@ -80,7 +81,7 @@ export function IntensityPanel({
   }, [volume, low, high, colormap]);
 
   const dv = (t: number) => volume.displayMin + t * (volume.displayMax - volume.displayMin);
-  const fmt = (x: number) => (Math.abs(x) >= 1000 ? x.toExponential(1) : +x.toFixed(1));
+  const fmt = (x: number) => formatCompact(x, { fixed: 1, exp: 1, tiny: false });
 
   return (
     <div className="intensity">
