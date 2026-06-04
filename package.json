@@ -1,0 +1,27 @@
+{
+  "name": "dicom-nifti-viewer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Educational WebGL2 volume viewer for NIfTI brain MRI — built to learn how DICOM/NIfTI data formats work.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "leva": "^0.10.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "three": "^0.171.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@types/three": "^0.171.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}
