@@ -223,7 +223,7 @@ export default function App() {
       "scene perf": folder({
         showPerf: { value: true, label: "show" },
         perfDetail: {
-          value: isPhone ? "compact" : "full",
+          value: "compact",
           options: ["compact", "full"],
           label: "detail",
           render: (get) => get("scene perf.showPerf"),
@@ -426,7 +426,9 @@ export default function App() {
             onSelect={(v) => set({ layout: v })}
           />
         )}
-        {volume && params.layout === "3D" && <InfoPanel volume={volume} mode={params.mode} />}
+        {volume && params.layout === "3D" && !isPhone && (
+          <InfoPanel volume={volume} mode={params.mode} />
+        )}
         {volume && viewer && params.layout === "MPR" && (
           <MprOverlay
             viewer={viewer}

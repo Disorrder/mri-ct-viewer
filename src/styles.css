@@ -196,14 +196,16 @@ body,
 }
 
 .perf-frame {
+  margin-left: auto; /* sits at the right edge of the top row */
   font-size: 10px;
   color: #8c9bb4;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap; /* keep "16.2 ms" on one line */
 }
 
+/* The GPU / computer model gets its own line under the FPS row. */
 .perf-gpu {
-  margin-left: auto;
-  max-width: 92px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -494,7 +496,7 @@ body,
     display: none;
   }
 
-  /* ScenePerf: smaller type, hide the sparkline. */
+  /* ScenePerf: smaller type. */
   .scene-perf {
     left: 8px;
     bottom: 8px;
@@ -508,11 +510,10 @@ body,
   .perf-fps {
     font-size: 19px;
   }
-  .perf-gpu {
-    max-width: 60px;
-  }
+  /* Shorter sparkline on phones — the canvas buffer tracks this height. */
   .perf-graph {
-    display: none;
+    height: 22px;
+    margin: 6px 0;
   }
 
   /* The intensity histogram is an advanced panel — hide it on phones. */

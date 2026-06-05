@@ -128,13 +128,16 @@ export const ScenePerf = memo(function ScenePerf({
     let raf = 0;
     let lastText = 0;
     let graphW = GRAPH_W; // canvas CSS width — tracks the panel so the graph spans it
+    let graphH = GRAPH_H; // canvas CSS height — CSS-driven, so it's shorter on phones
 
-    // Size the drawing buffer to the canvas's real width (it's width:100%), so the
-    // sparkline fills the panel crisply at DPR. Re-runs on any resize (mode/viewport).
+    // Size the drawing buffer to the canvas's real size (width:100% + CSS-driven
+    // height), so the sparkline fills the panel crisply at DPR. Re-runs on any
+    // resize (mode/viewport).
     const sizeCanvas = () => {
       graphW = Math.max(1, Math.round(cv.clientWidth) || GRAPH_W);
+      graphH = Math.max(1, Math.round(cv.clientHeight) || GRAPH_H);
       cv.width = graphW * dpr;
-      cv.height = GRAPH_H * dpr;
+      cv.height = graphH * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // a resize clears the buffer + transform
       if (fpsHistory.length > graphW) fpsHistory.splice(0, fpsHistory.length - graphW);
     };
@@ -158,11 +161,11 @@ export const ScenePerf = memo(function ScenePerf({
       if (fpsHistory.length > graphW) fpsHistory.shift();
       frameHistory.push(s.frameMs);
       if (frameHistory.length > HISTORY) frameHistory.shift();
-      ctx.clearRect(0, 0, graphW, GRAPH_H);
+      ctx.clearRect(0, 0, graphW, graphH);
       ctx.strokeStyle = "rgba(120,160,220,0.18)";
       ctx.lineWidth = 1;
       for (const guide of [60, 30]) {
-        const y = GRAPH_H - (guide / MAX_FPS) * GRAPH_H;
+        const y = graphH - (guide / MAX_FPS) * graphH;
         ctx.beginPath();
         ctx.moveTo(0, y + 0.5);
         ctx.lineTo(graphW, y + 0.5);
@@ -171,9 +174,9 @@ export const ScenePerf = memo(function ScenePerf({
       const x0 = graphW - fpsHistory.length;
       for (let i = 0; i < fpsHistory.length; i++) {
         const f = fpsHistory[i];
-        const hgt = Math.min(f / MAX_FPS, 1) * GRAPH_H;
+        const hgt = Math.min(f / MAX_FPS, 1) * graphH;
         ctx.fillStyle = fpsColor(f);
-        ctx.fillRect(x0 + i, GRAPH_H - hgt, 1, hgt);
+        ctx.fillRect(x0 + i, graphH - hgt, 1, hgt);
       }
 
       // --- numbers (throttled to ~8 Hz) ---
@@ -245,9 +248,9 @@ export const ScenePerf = memo(function ScenePerf({
         </span>
         <span className="perf-unit">FPS</span>
         <span className="perf-frame" ref={r.frame} />
-        <span className="perf-gpu" title={viewer.gpuName}>
-          {shortGpu(viewer.gpuName)}
-        </span>
+      </div>
+      <div className="perf-gpu" title={viewer.gpuName}>
+        {shortGpu(viewer.gpuName)}
       </div>
       <canvas className="perf-graph" ref={canvasRef} />
 
