@@ -4,10 +4,13 @@
  * setter the real controls use (see App.tsx's dev hook), so what you record is
  * the genuine pipeline, not a mock.
  *
- * NOT IN PRODUCTION. This module is reached only from the `import.meta.env.DEV`
- * branch in App.tsx, which Vite eliminates from the production bundle (DEV is
- * statically `false` there), so Rollup never emits this chunk. `tsc` still
- * type-checks it.
+ * OFF BY DEFAULT. This module is reached only when App.tsx sees
+ * `import.meta.env.VITE_INCLUDE_DEMO_SCRIPT === "true"`. That VITE_-prefixed var
+ * is unset unless you opt in (via `.env*` or the build env, e.g. a Vercel project
+ * var), independent of dev/prod — so by default the reel is absent: Vite inlines
+ * the var, the guard folds to a constant, and Rollup never emits this chunk. Set
+ * VITE_INCLUDE_DEMO_SCRIPT=true to ship it (e.g. so `/?demo` works on a deployed
+ * preview); it then loads lazily on trigger. `tsc` always type-checks it.
  *
  * Triggers (any of):
  *   • open the app at `/?demo` (or `#demo`) — auto-plays once the first volume is ready

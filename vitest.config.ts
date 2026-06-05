@@ -1,5 +1,5 @@
-import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import { defineConfig } from "vitest/config";
 
 // Vitest config is kept separate from vite.config.ts so the app build does not
 // pull in the test-only react()/jsdom setup. Pure-logic suites need no DOM, but

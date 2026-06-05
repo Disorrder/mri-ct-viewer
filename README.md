@@ -48,6 +48,34 @@ download-progress accounting). See [docs/development.md](docs/development.md).
 | `npm run lint` / `check` | Biome lint / lint + format check. |
 | `npm run format` | Biome format-write. |
 
+## Demo reel
+
+A hands-free feature tour drives every control on a timeline (handy for
+screen-recording). Trigger it with `/?demo` in the URL, `Shift+D`, or `__demo()`
+in the console.
+
+It ships only when the **`VITE_INCLUDE_DEMO_SCRIPT`** env var is set to `"true"`
+— **off by default everywhere** (dev and prod alike), so a normal build omits it
+and `/?demo` does nothing. When unset the reel chunk is tree-shaken out entirely;
+when enabled it is emitted as a separate lazy chunk that loads only once the demo
+is triggered.
+
+Enable it through any of Vite's env sources — locally via a `.env*` file:
+
+```bash
+# .env.development.local  (or .env.local)
+VITE_INCLUDE_DEMO_SCRIPT=true
+```
+
+…or for a one-off build / CI:
+
+```bash
+VITE_INCLUDE_DEMO_SCRIPT=true npm run build
+```
+
+On Vercel, add `VITE_INCLUDE_DEMO_SCRIPT=true` to the project's environment
+variables (so `/?demo` works on the deploy).
+
 ## Project structure
 
 ```

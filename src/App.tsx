@@ -291,14 +291,22 @@ export default function App() {
     };
   }, []);
 
-  // --- Dev-only handles so the scene can be poked from the console, plus the
-  //     feature-tour reel (Shift+D / `/?demo` / __demo()). The dynamic import
-  //     lives inside this DEV branch, so the production build tree-shakes the
-  //     whole reel out — its chunk is never emitted.
+  // --- Dev-only console handles so the scene can be poked by hand.
   useEffect(() => {
     if (import.meta.env.DEV) {
       (window as unknown as Record<string, unknown>).__leva = set;
       (window as unknown as Record<string, unknown>).__viewer = () => viewerRef.current;
+    }
+  }, [set]);
+
+  // --- Feature-tour reel (Shift+D / `/?demo` / __demo()). Gated purely on the
+  //     VITE_INCLUDE_DEMO_SCRIPT env var — off everywhere unless set to "true"
+  //     (independent of dev/prod). Vite statically inlines the var, so when it
+  //     isn't "true" this whole branch — and the dynamic import with it — folds
+  //     to a constant and Rollup tree-shakes the reel chunk away entirely. When
+  //     it is, the import keeps it lazy, loading only once the reel is triggered.
+  useEffect(() => {
+    if (import.meta.env.VITE_INCLUDE_DEMO_SCRIPT === "true") {
       import("./dev/demoReel").then((m) =>
         m.installDemoReel({
           set: set as unknown as (partial: Record<string, unknown>) => void,

@@ -1,8 +1,8 @@
-import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from "vite";
-import react from "@vitejs/plugin-react";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { resolve } from "node:path";
+import react from "@vitejs/plugin-react";
+import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from "vite";
 
 /**
  * Serve the .nii.gz volumes as raw bytes: Content-Type application/gzip and,
@@ -41,6 +41,12 @@ function rawNiftiBytes(): Plugin {
   };
 }
 
+// The demo-reel feature tour (`/?demo`, Shift+D, __demo()) is gated in App.tsx
+// on the VITE_INCLUDE_DEMO_SCRIPT env var (off unless set to "true"). Vite loads
+// and statically inlines that VITE_-prefixed var automatically — from .env files
+// or the build environment (e.g. a Vercel project var) — so no `define` here:
+// when it isn't "true" the guard folds to a constant and Rollup tree-shakes the
+// whole reel chunk out; when it is, the chunk ships and loads lazily on trigger.
 export default defineConfig({
   plugins: [react(), rawNiftiBytes()],
   server: { port: 5173, open: false },
