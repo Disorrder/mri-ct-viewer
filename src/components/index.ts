@@ -6,4 +6,6 @@ export { LoadBar } from "./LoadBar";
 export { MprOverlay } from "./MprOverlay";
 export { ScenePerf } from "./ScenePerf";
 export { SinglePlaneOverlay } from "./SinglePlaneOverlay";
+export { SliceScrubber } from "./SliceScrubber";
 export { ViewTabBar } from "./ViewTabBar";
+export { ViewThumbStrip } from "./ViewThumbStrip";

@@ -88,6 +88,16 @@ export interface SlicePick {
   verticalKey: SliceKey; // slice axis along the viewport's vertical
 }
 
+/** A small live preview the phone strip overlays: which view, and where to draw it.
+ *  The rect is in CSS px, container space, top-left origin (renderThumbnails flips Y). */
+export interface ViewThumb {
+  kind: Layout;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 /** Viewport arrangement. On phones the top bar drives the three single planes. */
 export type Layout = "3D" | "MPR" | "axial" | "coronal" | "sagittal";
 
@@ -154,6 +164,7 @@ export class VolumeViewer {
   private crosshairs: THREE.LineSegments[] = []; // [sagittal, coronal, axial]
   private crossMat: THREE.LineBasicMaterial;
   private layout: Layout = "3D";
+  private thumbs: ViewThumb[] = []; // phone strip: small live previews of the other views
   // Last params pushed from the UI. setVolume rebuilds the scene objects with
   // their default visibility (planes default to visible), so it re-applies these
   // at the end — otherwise a load that doesn't change any control (e.g. the new
@@ -785,6 +796,12 @@ export class VolumeViewer {
     };
   }
 
+  /** Phone strip: the small live previews of the other views to draw each frame.
+   *  Pass [] to clear (e.g. on desktop). Rects are CSS px in container space. */
+  setThumbnails(thumbs: ViewThumb[]) {
+    this.thumbs = thumbs;
+  }
+
   /** (Re)build the orientation cube (chamfered ViewCube) with the 6 face labels. */
   private buildGizmo(labels: string[]) {
     this.disposeGizmoCube();
@@ -1150,40 +1167,114 @@ export class VolumeViewer {
       r.render(this.scene, single);
       this.stats.viewports = 1;
       this.stats.volumePixels = 0; // single-plane ortho cams don't see the volume layer
-      return;
-    }
-
-    if (this.layout !== "MPR") {
+    } else if (this.layout !== "MPR") {
       r.setScissorTest(false);
       r.setViewport(0, 0, w, h);
       r.render(this.scene, this.camera);
       this.renderGizmo(w);
       this.stats.viewports = 1;
       this.stats.volumePixels = volVisible ? w * h * dpr2 : 0;
-      return;
+    } else {
+      // 2x2 grid. WebGL viewport origin is bottom-left, so the top row sits high.
+      const lw = Math.floor(w / 2);
+      const rw = w - lw;
+      const bh = Math.floor(h / 2);
+      const th = h - bh;
+      const views: Array<[THREE.Camera, number, number, number, number]> = [
+        [this.camCoronal, 0, bh, lw, th], // top-left
+        [this.camSagittal, lw, bh, rw, th], // top-right
+        [this.camAxial, 0, 0, lw, bh], // bottom-left
+        [this.camera, lw, 0, rw, bh], // bottom-right (3D)
+      ];
+      r.setScissorTest(true);
+      for (const [cam, x, y, vw, vh] of views) {
+        r.setViewport(x, y, vw, vh);
+        r.setScissor(x, y, vw, vh);
+        r.render(this.scene, cam);
+      }
+      r.setScissorTest(false);
+      this.renderGizmo(w); // bottom-right corner = inside the 3D quadrant
+      this.stats.viewports = 4;
+      this.stats.volumePixels = volVisible ? rw * bh * dpr2 : 0; // volume fills the 3D quadrant only
     }
 
-    // 2x2 grid. WebGL viewport origin is bottom-left, so the top row sits high.
-    const lw = Math.floor(w / 2);
-    const rw = w - lw;
-    const bh = Math.floor(h / 2);
-    const th = h - bh;
-    const views: Array<[THREE.Camera, number, number, number, number]> = [
-      [this.camCoronal, 0, bh, lw, th], // top-left
-      [this.camSagittal, lw, bh, rw, th], // top-right
-      [this.camAxial, 0, 0, lw, bh], // bottom-left
-      [this.camera, lw, 0, rw, bh], // bottom-right (3D)
-    ];
+    // Phone strip: small live previews of the other views, drawn on top.
+    this.renderThumbnails(w, h);
+  }
+
+  /** Draw each phone-strip preview as a small scissor viewport on top of the main
+   *  view. autoClear (left at its default) clears each scissor box before drawing,
+   *  so the cameras' projections are the only state we save/restore. */
+  private renderThumbnails(screenW: number, screenH: number) {
+    if (!this.thumbs.length || !this.texture) return;
+    const r = this.renderer;
     r.setScissorTest(true);
-    for (const [cam, x, y, vw, vh] of views) {
-      r.setViewport(x, y, vw, vh);
-      r.setScissor(x, y, vw, vh);
-      r.render(this.scene, cam);
+    for (const t of this.thumbs) {
+      if (t.w <= 0 || t.h <= 0) continue;
+      const x = t.x;
+      const y = screenH - t.y - t.h; // CSS top-left -> WebGL bottom-left origin
+      r.setViewport(x, y, t.w, t.h);
+      r.setScissor(x, y, t.w, t.h);
+      this.renderThumbView(t.kind, t.w / t.h);
     }
     r.setScissorTest(false);
-    this.renderGizmo(w); // bottom-right corner = inside the 3D quadrant
-    this.stats.viewports = 4;
-    this.stats.volumePixels = volVisible ? rw * bh * dpr2 : 0; // volume fills the 3D quadrant only
+    this.stats.viewports += this.thumbs.length;
+    // The ortho cameras were re-fit per thumbnail (square aspect, zoom 1) — restore
+    // them to the main view's framing for the next frame's pickSlice / rulers.
+    this.layoutCameras(screenW, screenH);
+  }
+
+  /** Render one preview: a volume-only mini 3D, or one ortho plane fit to the box. */
+  private renderThumbView(kind: Layout, aspect: number) {
+    const r = this.renderer;
+    if (kind === "3D") {
+      const prevAspect = this.camera.aspect;
+      const volWasVisible = this.volumeMesh?.visible ?? false;
+      if (this.volumeMesh) this.volumeMesh.visible = true; // show even in "Slices" mode
+      this.camera.aspect = aspect;
+      this.camera.updateProjectionMatrix();
+      r.render(this.scene, this.camera);
+      if (this.volumeMesh) this.volumeMesh.visible = volWasVisible;
+      this.camera.aspect = prevAspect;
+      this.camera.updateProjectionMatrix();
+      return;
+    }
+    const { x: bx, y: by, z: bz } = this.boxSize;
+    const cam =
+      kind === "axial" ? this.camAxial : kind === "coronal" ? this.camCoronal : this.camSagittal;
+    const [halfR, halfU] =
+      kind === "axial"
+        ? [bx / 2, by / 2]
+        : kind === "coronal"
+          ? [bx / 2, bz / 2]
+          : [by / 2, bz / 2];
+    this.fitThumbFrustum(cam, halfR, halfU, aspect);
+    // The plane mesh is hidden in 3D Volume mode; force it on for the preview.
+    const planeIdx = kind === "axial" ? 2 : kind === "coronal" ? 1 : 0;
+    const plane = this.slicePlanes[planeIdx];
+    const planeWasVisible = plane?.visible ?? false;
+    if (plane) plane.visible = true;
+    r.render(this.scene, cam);
+    if (plane) plane.visible = planeWasVisible;
+  }
+
+  /** Fit an ortho camera so the whole slice (no zoom) fills a thumbnail of `aspect`. */
+  private fitThumbFrustum(
+    cam: THREE.OrthographicCamera,
+    halfR: number,
+    halfU: number,
+    aspect: number,
+  ) {
+    const m = 1.06; // a little padding around the slice
+    let hr = halfR * m;
+    let hu = halfU * m;
+    if (aspect > hr / hu) hr = hu * aspect;
+    else hu = hr / aspect;
+    cam.left = -hr;
+    cam.right = hr;
+    cam.top = hu;
+    cam.bottom = -hu;
+    cam.updateProjectionMatrix();
   }
 
   private animate() {

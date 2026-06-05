@@ -13,5 +13,6 @@ export {
   type SlicePick,
   type ViewerParams,
   type ViewerStats,
+  type ViewThumb,
   VolumeViewer,
 } from "./VolumeViewer";

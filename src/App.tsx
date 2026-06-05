@@ -9,7 +9,9 @@ import {
   MprOverlay,
   ScenePerf,
   SinglePlaneOverlay,
+  SliceScrubber,
   ViewTabBar,
+  ViewThumbStrip,
 } from "./components";
 import { toViewerParams } from "./config/controls";
 import { DATASETS } from "./config/datasets";
@@ -17,7 +19,7 @@ import { useMediaQuery } from "./hooks/useMediaQuery";
 import { useVolumeLoader } from "./hooks/useVolumeLoader";
 import { gatherFiles } from "./lib/drop";
 import { exportClippedNifti } from "./lib/exportClip";
-import { DESKTOP_TABS, isOrtho, isSinglePlane, PHONE_TABS } from "./lib/layout";
+import { DESKTOP_TABS, isOrtho, isSinglePlane, PHONE_TABS, type SinglePlane } from "./lib/layout";
 import { COLORMAPS, SLAB_PROJECTIONS, type SlicePick, TECHNIQUES, VolumeViewer } from "./rendering";
 import type { Volume, VolumePreview } from "./volume";
 
@@ -413,8 +415,10 @@ export default function App() {
           }}
         />
         {isPhone ? (
-          <ViewTabBar
-            tabs={PHONE_TABS}
+          <ViewThumbStrip
+            viewer={viewer}
+            hostRef={mountRef}
+            views={PHONE_TABS}
             active={params.layout}
             onSelect={(v) => set({ layout: v })}
           />
@@ -424,6 +428,27 @@ export default function App() {
             className="topbar-desktop"
             active={params.layout}
             onSelect={(v) => set({ layout: v })}
+          />
+        )}
+        {isPhone && isSinglePlane(params.layout) && (
+          <SliceScrubber
+            plane={params.layout as SinglePlane}
+            value={
+              params.layout === "axial"
+                ? params.sliceZ
+                : params.layout === "coronal"
+                  ? params.sliceY
+                  : params.sliceX
+            }
+            onChange={(frac) =>
+              set(
+                params.layout === "axial"
+                  ? { sliceZ: frac }
+                  : params.layout === "coronal"
+                    ? { sliceY: frac }
+                    : { sliceX: frac },
+              )
+            }
           />
         )}
         {volume && params.layout === "3D" && !isPhone && (
