@@ -20,6 +20,17 @@ would be bypassed and byte-accurate download progress would be impossible
 (`Content-Length` would be the compressed size while the delivered body is the
 decompressed one).
 
+## Environment
+
+Real Vite environment files are intentionally local-only: `.env`, `.env.*`, and
+`*.local` are ignored by git. Use `.env.development.local` for `npm run dev` and
+`.env.production.local` only for local production builds. Hosted production
+deployments should define `VITE_DATA_BASE` in the deployment environment manager.
+
+Leaving `VITE_DATA_BASE` unset keeps dataset URLs same-origin, which is useful
+when serving the bundled `public/` data locally. Set it only when dataset assets
+should be fetched from external object storage.
+
 ## Scripts
 
 | Script | What it does |

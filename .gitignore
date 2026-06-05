@@ -1,6 +1,12 @@
 node_modules
 dist
 coverage
+
+# Environment values are local/deployment-specific; keep real values out of git.
+.env
+.env.*
+!.env.example
+
 *.local
 .DS_Store
 .npm-cache
