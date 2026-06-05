@@ -1,4 +1,3 @@
-import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { nextPaint } from "./lib/nextPaint";
 import "./styles.css";
@@ -30,11 +29,12 @@ async function start() {
   setBoot(0.85, "starting");
   const { default: App } = await import("./App"); // app code; three/leva already warm
 
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  );
+  // NB: intentionally NOT wrapped in <StrictMode>. Leva 0.10's folder height
+  // animation caches a fixed pixel height per folder on mount; StrictMode's
+  // double-invoked effects bake that height in before the panel settles, so
+  // render-gated controls (e.g. the clip ranges) overflow instead of growing
+  // their section. Without the double-invoke the heights stay `auto` and resize.
+  createRoot(document.getElementById("root")!).render(<App />);
 
   setBoot(1, "ready");
   // Fade the splash out only after the app's first paint, so there's no flash of
