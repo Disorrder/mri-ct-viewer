@@ -222,8 +222,9 @@ export default function App() {
         }),
       }),
       // Live performance overlay (ScenePerf). On/off + compact/full readout.
+      // Hidden by default on phones (cramped screen); still toggleable.
       "scene perf": folder({
-        showPerf: { value: true, label: "show" },
+        showPerf: { value: !isPhone, label: "show" },
         perfDetail: {
           value: "compact",
           options: ["compact", "full"],
