@@ -10,9 +10,10 @@
  * the hand-off is zero-copy.
  */
 import type { Dataset } from "../config/datasets";
+import { loadDicomSeriesProgressive } from "../dicom";
 import { loadDataset, loadDroppedFiles } from "../lib/loadVolume";
 import type { LoadProgress } from "../nifti";
-import type { Volume } from "../volume";
+import type { Volume, VolumePreview } from "../volume";
 
 export type DecodeRequest =
   | { id: number; kind: "dataset"; dataset: Dataset }
@@ -20,6 +21,10 @@ export type DecodeRequest =
 
 export type DecodeMessage =
   | { id: number; type: "progress"; p: LoadProgress }
+  // Progressive series preview: one "preview-init" (geometry) then a "preview-slab"
+  // per slice as it downloads, before the final "result" lands.
+  | { id: number; type: "preview-init"; preview: VolumePreview }
+  | { id: number; type: "preview-slab"; z: number; data: Uint8Array<ArrayBuffer> }
   | { id: number; type: "result"; volume: Volume }
   | { id: number; type: "error"; message: string };
 
@@ -38,10 +43,24 @@ ctx.onmessage = async (e: MessageEvent<DecodeRequest>) => {
     ctx.postMessage({ id: req.id, type: "progress", p } satisfies DecodeMessage);
 
   try {
-    const volume =
-      req.kind === "dataset"
-        ? await loadDataset(req.dataset, onProgress)
-        : await loadDroppedFiles(req.files, onProgress);
+    let volume: Volume;
+    if (req.kind === "dataset" && req.dataset.format === "dicom" && req.dataset.manifest) {
+      // A DICOM series is the one source we can stream: fetch slices in bisection
+      // order and push each as a z-slab so the volume densifies while it loads.
+      volume = await loadDicomSeriesProgressive(req.dataset.manifest, {
+        onProgress,
+        onInit: (preview) =>
+          ctx.postMessage({ id: req.id, type: "preview-init", preview } satisfies DecodeMessage),
+        onSlab: (z, data) =>
+          ctx.postMessage({ id: req.id, type: "preview-slab", z, data } satisfies DecodeMessage, {
+            transfer: [data.buffer],
+          }),
+      });
+    } else if (req.kind === "dataset") {
+      volume = await loadDataset(req.dataset, onProgress);
+    } else {
+      volume = await loadDroppedFiles(req.files, onProgress);
+    }
 
     // Transfer the big arrays instead of copying them across the worker boundary.
     ctx.postMessage({ id: req.id, type: "result", volume } satisfies DecodeMessage, {

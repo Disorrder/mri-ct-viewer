@@ -7,10 +7,19 @@
  */
 import type { Dataset } from "../config/datasets";
 import type { LoadProgress } from "../nifti";
-import type { Volume } from "../volume";
+import type { Volume, VolumePreview } from "../volume";
 import type { DecodeMessage, DecodeRequest } from "../workers/decode.worker";
 
 export type DecodeInput = { kind: "dataset"; dataset: Dataset } | { kind: "files"; files: File[] };
+
+/** Callbacks the decode worker drives as a load progresses. */
+export interface DecodeHandlers {
+  onProgress?: (p: LoadProgress) => void;
+  /** Progressive series only: geometry for the empty preview texture. */
+  onInit?: (preview: VolumePreview) => void;
+  /** Progressive series only: one decoded z-slab to patch into the preview. */
+  onSlab?: (z: number, data: Uint8Array<ArrayBuffer>) => void;
+}
 
 let worker: Worker | null = null;
 let seq = 0;
@@ -25,10 +34,8 @@ function getWorker(): Worker {
 }
 
 /** Decode a dataset or dropped files in the worker, reporting progress as it goes. */
-export function decodeVolume(
-  input: DecodeInput,
-  onProgress?: (p: LoadProgress) => void,
-): Promise<Volume> {
+export function decodeVolume(input: DecodeInput, handlers: DecodeHandlers = {}): Promise<Volume> {
+  const { onProgress, onInit, onSlab } = handlers;
   const id = ++seq;
   const w = getWorker();
   return new Promise<Volume>((resolve, reject) => {
@@ -37,6 +44,14 @@ export function decodeVolume(
       if (m.id !== id) return; // a message for a different (older) request
       if (m.type === "progress") {
         onProgress?.(m.p);
+        return;
+      }
+      if (m.type === "preview-init") {
+        onInit?.(m.preview);
+        return;
+      }
+      if (m.type === "preview-slab") {
+        onSlab?.(m.z, m.data);
         return;
       }
       w.removeEventListener("message", handler);

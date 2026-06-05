@@ -1,5 +1,5 @@
 import { button, folder, Leva, useControls } from "leva";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BottomSheet,
   DropOverlay,
@@ -16,10 +16,10 @@ import { DATASETS } from "./config/datasets";
 import { useMediaQuery } from "./hooks/useMediaQuery";
 import { useVolumeLoader } from "./hooks/useVolumeLoader";
 import { gatherFiles } from "./lib/drop";
-import { exportClippedNifti, FULL_BOX } from "./lib/exportClip";
+import { exportClippedNifti } from "./lib/exportClip";
 import { DESKTOP_TABS, isOrtho, isSinglePlane, PHONE_TABS } from "./lib/layout";
 import { COLORMAPS, SLAB_PROJECTIONS, type SlicePick, TECHNIQUES, VolumeViewer } from "./rendering";
-import type { Volume } from "./volume";
+import type { Volume, VolumePreview } from "./volume";
 
 export default function App() {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -169,35 +169,37 @@ export default function App() {
           },
           // Save the cut region to disk. Always a NIfTI-1 `.nii` (the only format
           // we can write from the neutral 8-bit volume — see lib/exportClip.ts),
-          // so it works for DICOM sources too. Leva buttons can't be conditionally
-          // rendered, so when the cut is off we export the whole volume instead.
+          // so it works for DICOM sources too. Only shown while the cut is on (a
+          // top-level `render` works on buttons too, same as the inputs above), so
+          // it always exports the current crop box.
           // NB: keep the label free of "." — Leva splits keys on dots into folders,
           // which would wrap this button in a stray "export cut (" subheading.
-          "export cut (nii)": button((get) => {
-            const v = volumeRef.current;
-            if (!v) return;
-            const box = get("clip.clipEnabled")
-              ? {
-                  min: [get("clip.clipX")[0], get("clip.clipY")[0], get("clip.clipZ")[0]] as [
-                    number,
-                    number,
-                    number,
-                  ],
-                  max: [get("clip.clipX")[1], get("clip.clipY")[1], get("clip.clipZ")[1]] as [
-                    number,
-                    number,
-                    number,
-                  ],
-                }
-              : FULL_BOX;
-            const blob = exportClippedNifti(v, box, v.format);
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = get("clip.clipEnabled") ? "crop.nii" : "volume.nii";
-            a.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-          }),
+          "export cut (nii)": {
+            ...button((get) => {
+              const v = volumeRef.current;
+              if (!v) return;
+              const box = {
+                min: [get("clip.clipX")[0], get("clip.clipY")[0], get("clip.clipZ")[0]] as [
+                  number,
+                  number,
+                  number,
+                ],
+                max: [get("clip.clipX")[1], get("clip.clipY")[1], get("clip.clipZ")[1]] as [
+                  number,
+                  number,
+                  number,
+                ],
+              };
+              const blob = exportClippedNifti(v, box, v.format);
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "crop.nii";
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }),
+            render: (get) => get("clip.clipEnabled"),
+          },
         },
         {
           render: (get) =>
@@ -238,10 +240,17 @@ export default function App() {
     [isPhone],
   );
 
-  // Build the scene for a parsed volume + reset the window to its auto value.
+  // Build the scene for a parsed volume + reset the window to its auto value. The
+  // GPU texture upload is chunked across frames (so a big volume doesn't freeze the
+  // page); onUploadProgress drives the load bar, shouldCancel aborts a stale load.
   const applyVolume = useCallback(
-    (vol: Volume) => {
-      viewerRef.current?.setVolume(vol);
+    async (
+      vol: Volume,
+      onUploadProgress?: (frac: number) => void,
+      shouldCancel?: () => boolean,
+    ) => {
+      await viewerRef.current?.setVolumeProgressive(vol, onUploadProgress, shouldCancel);
+      if (shouldCancel?.()) return; // superseded mid-upload — don't apply
       volumeRef.current = vol;
       setVolume(vol);
       set({
@@ -251,9 +260,20 @@ export default function App() {
     [set],
   );
 
+  // Progressive preview for streamed DICOM series: the loader hands the viewer an
+  // empty texture (beginProgressive) then z-slabs (pushSlab) as slices download, so
+  // the volume visibly densifies before the final volume lands via applyVolume.
+  const previewSink = useMemo(
+    () => ({
+      onInit: (p: VolumePreview) => viewerRef.current?.beginProgressive(p),
+      onSlab: (z: number, data: Uint8Array<ArrayBuffer>) => viewerRef.current?.pushSlab(z, data),
+    }),
+    [],
+  );
+
   // Dataset loading (fetch + parse + cache + progress) and drag-and-drop live in
   // a hook; applyVolume is the sink it calls for every parsed volume.
-  const { progress, error, loadFiles } = useVolumeLoader(params.dataset, applyVolume);
+  const { progress, error, loadFiles } = useVolumeLoader(params.dataset, applyVolume, previewSink);
 
   // --- Create the Three.js viewer once.
   useEffect(() => {

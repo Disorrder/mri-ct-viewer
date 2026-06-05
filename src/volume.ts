@@ -33,6 +33,20 @@ export interface VolumeBase {
 /** A decoded volume, tagged by source format. */
 export type Volume = NiftiVolume | DicomVolume;
 
+/**
+ * Geometry for a volume that is still streaming in. The renderer allocates an
+ * empty 3D texture of this size, then fills it z-slab by z-slab as slices arrive
+ * (see VolumeViewer.beginProgressive / pushSlab). Spacing + affine are provisional
+ * (derived from the first slice) and replaced when the final `Volume` is applied.
+ */
+export interface VolumePreview {
+  nx: number;
+  ny: number;
+  nz: number;
+  spacing: [number, number, number];
+  affine: number[][];
+}
+
 export interface VolumeStats {
   texture: Uint8Array<ArrayBuffer>;
   histogram: Uint32Array;
@@ -94,4 +108,26 @@ export function quantize(
     displayMax: hi * slope + inter,
     suggestedWindow: [p1 / 255, p99 / 255],
   };
+}
+
+/**
+ * Map one frame's raw values to R8 against a *fixed* [lo, hi] range — used while a
+ * series streams in, before the global range is known. Unlike `quantize` (which
+ * scans the whole volume for its range), this lets every slab share one provisional
+ * mapping so the partial render stays visually consistent; the final `quantize`
+ * pass replaces it once all slices are in.
+ */
+export function quantizeFrame(
+  raw: ArrayLike<number>,
+  lo: number,
+  hi: number,
+): Uint8Array<ArrayBuffer> {
+  const span = hi - lo || 1;
+  const n = raw.length;
+  const out = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const b = Math.round(((raw[i] - lo) / span) * 255);
+    out[i] = b < 0 ? 0 : b > 255 ? 255 : b;
+  }
+  return out;
 }

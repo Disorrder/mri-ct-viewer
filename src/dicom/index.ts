@@ -4,10 +4,13 @@
  * into the same `Volume` the rest of the app renders. See docs/dicom-vs-nifti.md.
  */
 export {
+  interleavedOrder,
   loadDicomFromFiles,
   loadDicomMultiframeFromUrl,
   loadDicomSeriesFromManifest,
+  loadDicomSeriesProgressive,
+  type SeriesStreamSink,
 } from "./loader";
 export { type DicomImage, hasDicomMagic, parseDicom, readDicomImage } from "./parser";
-export { buildDicomVolume } from "./series";
+export { assembleDicomVolume, buildDicomVolume } from "./series";
 export type { DicomMeta, DicomVolume } from "./types";

@@ -3,11 +3,17 @@ import { DATASETS } from "../config/datasets";
 import { decodeVolume } from "../lib/decodeClient";
 import { progressLabel } from "../lib/loadVolume";
 import { nextPaint } from "../lib/nextPaint";
-import type { Volume } from "../volume";
+import type { Volume, VolumePreview } from "../volume";
 
 export interface LoadState {
   fraction: number;
   label: string;
+}
+
+/** Progressive-preview hooks: a streamed series fills these in before onVolume. */
+export interface PreviewSink {
+  onInit?: (preview: VolumePreview) => void;
+  onSlab?: (z: number, data: Uint8Array<ArrayBuffer>) => void;
 }
 
 /**
@@ -16,9 +22,24 @@ export interface LoadState {
  * volumes — a single .nii/.dcm, or a folder of DICOM slices. Calls onVolume with
  * each decoded volume; surfaces progress + error for the UI. The dataset fetch is
  * cancellable so a quick dataset switch can't apply a stale volume.
+ *
+ * For a streamed DICOM series the optional `preview` sink receives the empty-texture
+ * geometry then a z-slab per slice, so the viewer can show a coarsening stack during
+ * the load; preview calls are gated by the same cancellation as onVolume.
  */
-export function useVolumeLoader(datasetKey: string, onVolume: (vol: Volume) => void) {
+export function useVolumeLoader(
+  datasetKey: string,
+  onVolume: (
+    vol: Volume,
+    onUploadProgress?: (frac: number) => void,
+    shouldCancel?: () => boolean,
+  ) => void | Promise<void>,
+  preview?: PreviewSink,
+) {
   const cacheRef = useRef<Map<string, Volume>>(new Map());
+  // Held in a ref so a changing `preview` object doesn't re-run the load effect.
+  const previewRef = useRef(preview);
+  previewRef.current = preview;
   const [progress, setProgress] = useState<LoadState | null>({ fraction: 0, label: "connecting" });
   const [error, setError] = useState<string | null>(null);
 
@@ -27,26 +48,50 @@ export function useVolumeLoader(datasetKey: string, onVolume: (vol: Volume) => v
     const ds = DATASETS[datasetKey];
 
     (async () => {
+      // Drives the load bar through the chunked GPU upload — the tail (0.95→1) of
+      // every load, fresh or cached. Gated by the same cancellation as onVolume.
+      const onUpload = (frac: number) => {
+        if (!cancelled) setProgress({ fraction: 0.95 + frac * 0.05, label: "uploading to GPU" });
+      };
       const cached = cacheRef.current.get(datasetKey);
       if (cached) {
         setError(null);
-        onVolume(cached); // instant — no fetch, no progress bar
-        setProgress(null);
+        // No fetch/decode, but still chunk the GPU upload so switching to a cached
+        // dataset doesn't freeze on one big texImage3D.
+        setProgress({ fraction: 0.95, label: "uploading to GPU" });
+        await onVolume(cached, onUpload, () => cancelled);
+        if (cancelled) return;
+        setProgress({ fraction: 1, label: "ready" });
+        setTimeout(() => !cancelled && setProgress(null), 280);
         return;
       }
       try {
         setError(null);
         setProgress({ fraction: 0, label: "connecting" });
-        const vol = await decodeVolume({ kind: "dataset", dataset: ds }, (p) => {
-          if (cancelled) return;
-          setProgress({ fraction: p.fraction, label: progressLabel(ds, p) });
-        });
+        const vol = await decodeVolume(
+          { kind: "dataset", dataset: ds },
+          {
+            onProgress: (p) => {
+              if (cancelled) return;
+              setProgress({ fraction: p.fraction, label: progressLabel(ds, p) });
+            },
+            onInit: (preview) => {
+              if (cancelled) return;
+              previewRef.current?.onInit?.(preview);
+            },
+            onSlab: (z, data) => {
+              if (cancelled) return;
+              previewRef.current?.onSlab?.(z, data);
+            },
+          },
+        );
         if (cancelled) return;
         cacheRef.current.set(datasetKey, vol);
-        setProgress({ fraction: 0.97, label: "building scene (GPU upload)" });
-        await nextPaint(); // let 97% paint before the synchronous GPU upload
+        setProgress({ fraction: 0.95, label: "uploading to GPU" });
+        await nextPaint(); // let the last decode % paint before the upload starts
         if (cancelled) return;
-        onVolume(vol);
+        await onVolume(vol, onUpload, () => cancelled); // chunked, non-blocking GPU upload
+        if (cancelled) return;
         setProgress({ fraction: 1, label: "ready" });
         setTimeout(() => !cancelled && setProgress(null), 280);
       } catch (e) {
@@ -69,15 +114,22 @@ export function useVolumeLoader(datasetKey: string, onVolume: (vol: Volume) => v
       try {
         setError(null);
         setProgress({ fraction: 0.1, label: `reading ${what}` });
-        const vol = await decodeVolume({ kind: "files", files }, (p) => {
-          setProgress({
-            fraction: p.fraction,
-            label: `${p.phase === "parse" ? "building" : "reading"} ${what}`,
-          });
-        });
-        setProgress({ fraction: 0.97, label: "building scene" });
+        const vol = await decodeVolume(
+          { kind: "files", files },
+          {
+            onProgress: (p) => {
+              setProgress({
+                fraction: p.fraction,
+                label: `${p.phase === "parse" ? "building" : "reading"} ${what}`,
+              });
+            },
+          },
+        );
+        setProgress({ fraction: 0.95, label: "uploading to GPU" });
         await nextPaint();
-        onVolume(vol);
+        await onVolume(vol, (frac) =>
+          setProgress({ fraction: 0.95 + frac * 0.05, label: "uploading to GPU" }),
+        );
         setProgress({ fraction: 1, label: "ready" });
         setTimeout(() => setProgress(null), 280);
       } catch (e) {

@@ -33,6 +33,17 @@ export function buildDicomVolume(buffers: ArrayBuffer[]): DicomVolume {
   if (images.length === 0) {
     throw lastError instanceof Error ? lastError : new Error("No readable DICOM images found.");
   }
+  return assembleDicomVolume(images);
+}
+
+/**
+ * Stack already-parsed DICOM images into a volume: sort by slice position, infer
+ * spacing/affine, and quantize globally. Split out from `buildDicomVolume` so the
+ * progressive loader — which parses each slice as it downloads — can reuse it for
+ * the authoritative volume without re-parsing every buffer.
+ */
+export function assembleDicomVolume(images: DicomImage[]): DicomVolume {
+  if (images.length === 0) throw new Error("No readable DICOM images found.");
   const first = images[0];
 
   let source: "series" | "multiframe";
@@ -149,7 +160,7 @@ function spacingFromPositions(sorted: number[]): number | null {
  *   i → rowCosines * colSpacing,  j → colCosines * rowSpacing,  k → normal * dz.
  * DICOM patient coordinates are LPS, so we negate the X and Y rows to get RAS.
  */
-function buildAffine(
+export function buildAffine(
   orientation: number[],
   position: number[],
   pixelSpacing: [number, number],

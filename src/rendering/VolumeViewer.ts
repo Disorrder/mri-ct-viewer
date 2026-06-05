@@ -14,7 +14,8 @@
  */
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import type { Volume } from "../volume";
+import { nextPaint } from "../lib/nextPaint";
+import type { Volume, VolumePreview } from "../volume";
 import { SLICE_FRAG, SLICE_VERT, VOLUME_FRAG, VOLUME_VERT } from "./glsl";
 import {
   ANATOMY_WORDS,
@@ -42,6 +43,12 @@ const C_SAGITTAL = 0xff5a3c;
 
 const GIZMO_PX = 128; // on-screen size of the corner orientation cube
 const HOME_DIST = 2.7; // camera distance for the default framing (object-space units)
+
+// The volume's GPU texture is uploaded in z-slabs of roughly this many bytes per
+// animation frame. One texImage3D of a large volume (tens of MB) blocks the main
+// thread long enough to drop frames and freeze input; chunking keeps each frame's
+// upload bounded so the page stays live and the load bar can animate.
+const UPLOAD_CHUNK_BYTES = 4 * 1024 * 1024;
 
 /** Subset of EXT_disjoint_timer_query_webgl2 we use for real GPU timing. */
 interface TimerExt {
@@ -125,6 +132,10 @@ export class VolumeViewer {
   private homeUp = new THREE.Vector3(0, 0, 1);
 
   private texture: THREE.Data3DTexture | null = null;
+  // Current texture dimensions, retained so pushSlab can bounds-check z-slab uploads.
+  private volNx = 0;
+  private volNy = 0;
+  private volNz = 0;
   private volumeMesh: THREE.Mesh | null = null;
   private slicePlanes: THREE.Mesh[] = [];
   private wireframe: THREE.LineSegments | null = null;
@@ -424,12 +435,64 @@ export class VolumeViewer {
     this.raf = requestAnimationFrame(this.animate);
   }
 
-  /** Build the GPU 3D texture + geometry for a freshly parsed volume. */
+  /** Build the GPU 3D texture + geometry for a freshly parsed volume (one synchronous upload). */
   setVolume(vol: Volume) {
-    this.disposeVolumeObjects();
+    const tex = this.makeVolumeTexture(vol.nx, vol.ny, vol.nz, vol.texture);
+    this.buildScene(vol.nx, vol.ny, vol.nz, vol.spacing, vol.affine, tex);
+  }
 
-    // --- Upload voxels as a single-channel R8 3D texture.
-    const tex = new THREE.Data3DTexture(vol.texture, vol.nx, vol.ny, vol.nz);
+  /**
+   * Like setVolume, but uploads the 3D texture to the GPU in z-chunks spread across
+   * animation frames, so a large dataset never freezes the page on a single
+   * texImage3D. The currently-shown volume/preview stays live throughout — the
+   * finished texture is swapped in only once it is fully uploaded, so a partial
+   * upload never reaches the screen. onProgress reports the upload fraction in
+   * [0,1]; shouldCancel lets a superseding load abort and discard the work.
+   */
+  async setVolumeProgressive(
+    vol: Volume,
+    onProgress?: (frac: number) => void,
+    shouldCancel?: () => boolean,
+  ): Promise<void> {
+    const tex = await this.uploadVolumeTexture(
+      vol.nx,
+      vol.ny,
+      vol.nz,
+      vol.texture,
+      onProgress,
+      shouldCancel,
+    );
+    if (!tex) return; // cancelled mid-upload; nothing built, GPU storage released
+    this.buildScene(vol.nx, vol.ny, vol.nz, vol.spacing, vol.affine, tex);
+  }
+
+  /**
+   * Start a progressive load: build the scene around an empty texture sized to the
+   * whole series, ready for pushSlab to fill in z-slabs as slices download. The
+   * geometry is provisional (from the first slice) and the final setVolume replaces
+   * it with the authoritative, globally-windowed volume once everything is in.
+   */
+  beginProgressive(p: VolumePreview) {
+    const tex = this.makeVolumeTexture(p.nx, p.ny, p.nz, new Uint8Array(p.nx * p.ny * p.nz));
+    this.buildScene(p.nx, p.ny, p.nz, p.spacing, p.affine, tex);
+  }
+
+  /** Patch one z-slab of the in-progress preview texture as its slice arrives. */
+  pushSlab(z: number, data: Uint8Array<ArrayBuffer>) {
+    const dst = this.texture;
+    if (!dst || z < 0 || z >= this.volNz || data.length !== this.volNx * this.volNy) return;
+    // A throwaway 1-deep texture as the copy source: copyTextureToTexture runs a
+    // CPU texSubImage3D into the right z-offset, handling the unpack state (and
+    // allocating dst on the first call) the way three's own uploads do.
+    const slab = new THREE.Data3DTexture(data, this.volNx, this.volNy, 1);
+    slab.format = THREE.RedFormat;
+    slab.type = THREE.UnsignedByteType;
+    this.renderer.copyTextureToTexture(slab, dst, null, new THREE.Vector3(0, 0, z));
+    slab.dispose();
+  }
+
+  /** Apply the standard R8 single-channel settings to a volume 3D texture. */
+  private configureVolumeTexture(tex: THREE.Data3DTexture): THREE.Data3DTexture {
     tex.format = THREE.RedFormat;
     tex.type = THREE.UnsignedByteType;
     tex.minFilter = THREE.LinearFilter;
@@ -437,15 +500,85 @@ export class VolumeViewer {
     tex.wrapS = tex.wrapT = tex.wrapR = THREE.ClampToEdgeWrapping;
     tex.unpackAlignment = 1; // R8 rows aren't 4-byte aligned for odd widths
     tex.needsUpdate = true;
+    return tex;
+  }
+
+  /** A fully-populated R8 3D texture from voxel data — uploaded in one go on next render. */
+  private makeVolumeTexture(
+    nx: number,
+    ny: number,
+    nz: number,
+    data: Uint8Array<ArrayBuffer>,
+  ): THREE.Data3DTexture {
+    return this.configureVolumeTexture(new THREE.Data3DTexture(data, nx, ny, nz));
+  }
+
+  /**
+   * Allocate an empty R8 3D texture and fill it from `data` one z-chunk per frame,
+   * yielding to the event loop between chunks so input and animation keep running.
+   * Passing no data + dataReady=false makes three allocate GPU storage (texStorage3D)
+   * without the big per-buffer texImage3D; each chunk is then a bounded texSubImage3D
+   * (via copyTextureToTexture). Returns the filled texture, or null if shouldCancel
+   * fired — in which case its GPU storage is released. The texture is bound to no
+   * material while filling, so partially-uploaded contents never reach the screen.
+   */
+  private async uploadVolumeTexture(
+    nx: number,
+    ny: number,
+    nz: number,
+    data: Uint8Array<ArrayBuffer>,
+    onProgress?: (frac: number) => void,
+    shouldCancel?: () => boolean,
+  ): Promise<THREE.Data3DTexture | null> {
+    const tex = this.configureVolumeTexture(new THREE.Data3DTexture(null, nx, ny, nz));
+    tex.source.dataReady = false; // allocate storage on first copy, skip the full upload
+
+    const sliceBytes = nx * ny;
+    const chunkDepth = Math.max(1, Math.min(nz, Math.floor(UPLOAD_CHUNK_BYTES / sliceBytes)));
+    for (let z = 0; z < nz; z += chunkDepth) {
+      if (shouldCancel?.()) {
+        tex.dispose();
+        return null;
+      }
+      const d = Math.min(chunkDepth, nz - z);
+      // A contiguous z-slab is a contiguous subarray (the texture is z-major), so the
+      // chunk is a zero-copy view uploaded straight into its z-offset in the target.
+      const sub = data.subarray(z * sliceBytes, (z + d) * sliceBytes) as Uint8Array<ArrayBuffer>;
+      const chunk = new THREE.Data3DTexture(sub, nx, ny, d);
+      chunk.format = THREE.RedFormat;
+      chunk.type = THREE.UnsignedByteType;
+      this.renderer.copyTextureToTexture(chunk, tex, null, new THREE.Vector3(0, 0, z));
+      chunk.dispose();
+      onProgress?.(Math.min(1, (z + d) / nz));
+      if (z + d < nz) await nextPaint(); // let the frame render + input flush between chunks
+    }
+    return tex;
+  }
+
+  /** Shared scene build for both the final volume and the streaming preview. */
+  private buildScene(
+    nx: number,
+    ny: number,
+    nz: number,
+    spacing: [number, number, number],
+    affine: number[][],
+    tex: THREE.Data3DTexture,
+  ) {
+    this.disposeVolumeObjects();
+    this.volNx = nx;
+    this.volNy = ny;
+    this.volNz = nz;
+
+    // --- The single-channel R8 3D texture, already built + uploaded by the caller.
     this.texture = tex;
     // Estimated GPU texture footprint: one R8 byte per voxel. This dwarfs every
     // other texture in the scene (gizmo labels), so it's the figure worth showing.
-    this.stats.texBytes = vol.nx * vol.ny * vol.nz;
+    this.stats.texBytes = nx * ny * nz;
 
     // --- Physical box size = voxel count * spacing, normalized so the largest
     // axis = 1. This is what gives the brain its correct anatomical proportions.
-    const sp = vol.spacing;
-    const phys = new THREE.Vector3(vol.nx * sp[0], vol.ny * sp[1], vol.nz * sp[2]);
+    const sp = spacing;
+    const phys = new THREE.Vector3(nx * sp[0], ny * sp[1], nz * sp[2]);
     const maxDim = Math.max(phys.x, phys.y, phys.z);
     this.boxSize.copy(phys).divideScalar(maxDim);
     this.maxDimMm = maxDim; // 1 object-space unit == maxDim mm (uniform)
@@ -453,10 +586,10 @@ export class VolumeViewer {
 
     this.spacing.set(sp[0], sp[1], sp[2]);
     this.volumeMat.uniforms.uData.value = tex;
-    this.volumeMat.uniforms.uTexel.value = new THREE.Vector3(1 / vol.nx, 1 / vol.ny, 1 / vol.nz);
+    this.volumeMat.uniforms.uTexel.value = new THREE.Vector3(1 / nx, 1 / ny, 1 / nz);
     this.volumeMat.uniforms.uBoxSize.value = this.boxSize;
     // Per-axis voxel step along each slab normal (1 voxel in [0,1] tex space).
-    const stepN = [1 / vol.nx, 1 / vol.ny, 1 / vol.nz];
+    const stepN = [1 / nx, 1 / ny, 1 / nz];
     this.sliceMats.forEach((m, i) => {
       m.uniforms.uData.value = tex;
       m.uniforms.uBoxSize.value = this.boxSize;
@@ -537,11 +670,11 @@ export class VolumeViewer {
     });
 
     this.layoutCameras(this.container.clientWidth, this.container.clientHeight);
-    this.buildGizmo(faceLabelsFromAffine(vol.affine)); // anatomical labels from the affine
+    this.buildGizmo(faceLabelsFromAffine(affine)); // anatomical labels from the affine
 
     // Frame the new volume face-on: derive the default view from its affine and
     // snap the 3D camera there, so loading a dataset starts looking at the face.
-    this.setHomeFromAffine(vol.affine);
+    this.setHomeFromAffine(affine);
     this.resetView();
 
     // Re-apply the current UI state so the freshly built objects get the right
