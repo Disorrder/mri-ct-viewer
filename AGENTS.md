@@ -65,6 +65,10 @@ NIfTI inputs with `tests/nifti/fixtures.ts` rather than committing binaries.
   `style`). One coherent change per commit. When a refactor moves a source file,
   update its test imports in the **same** commit so every commit type-checks and
   tests green.
+- **Commit authorship.** Do not add `Co-authored-by`, `Co-Authored-By`,
+  `Signed-off-by`, or agent/tool attribution trailers for AI assistants. Commits
+  should list only the human configured in Git as author/committer unless the
+  human explicitly asks otherwise.
 - **Formatting/linting via Biome** (`biome.json`): 2-space indent, double quotes,
   semicolons, trailing commas, 100-col. A few rules are intentionally off
   (noNonNullAssertion for ref/getContext access; two a11y rules for the
