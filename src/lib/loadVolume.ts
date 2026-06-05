@@ -27,15 +27,22 @@ export function loadDataset(ds: Dataset, onProgress?: (p: LoadProgress) => void)
 /**
  * Decode files dropped onto the page. Several files are taken as a DICOM series
  * (a dropped folder of slices); a single file is sniffed — DICOM by its "DICM"
- * magic, otherwise parsed as NIfTI.
+ * magic, otherwise parsed as NIfTI. Progress is coarse (read → parse) since a
+ * local file has no meaningful download phase.
  */
-export async function loadDroppedFiles(files: File[]): Promise<Volume> {
+export async function loadDroppedFiles(
+  files: File[],
+  onProgress?: (p: LoadProgress) => void,
+): Promise<Volume> {
   if (files.length === 0) throw new Error("No files to load.");
+  onProgress?.({ phase: "download", loaded: 0, total: 0, fraction: 0.3 });
   if (files.length > 1) {
     const buffers = await Promise.all(files.map((f) => f.arrayBuffer()));
+    onProgress?.({ phase: "parse", loaded: 0, total: 0, fraction: 0.6 });
     return buildDicomVolume(buffers);
   }
   const buf = await files[0].arrayBuffer();
+  onProgress?.({ phase: "parse", loaded: 0, total: 0, fraction: 0.6 });
   return hasDicomMagic(buf) ? buildDicomVolume([buf]) : parseNifti(buf);
 }
 

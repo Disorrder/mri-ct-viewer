@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DATASETS } from "../config/datasets";
-import { loadDataset, loadDroppedFiles, progressLabel } from "../lib/loadVolume";
+import { decodeVolume } from "../lib/decodeClient";
+import { progressLabel } from "../lib/loadVolume";
+import { nextPaint } from "../lib/nextPaint";
 import type { Volume } from "../volume";
 
 export interface LoadState {
@@ -35,14 +37,14 @@ export function useVolumeLoader(datasetKey: string, onVolume: (vol: Volume) => v
       try {
         setError(null);
         setProgress({ fraction: 0, label: "connecting" });
-        const vol = await loadDataset(ds, (p) => {
+        const vol = await decodeVolume({ kind: "dataset", dataset: ds }, (p) => {
           if (cancelled) return;
           setProgress({ fraction: p.fraction, label: progressLabel(ds, p) });
         });
         if (cancelled) return;
         cacheRef.current.set(datasetKey, vol);
         setProgress({ fraction: 0.97, label: "building scene (GPU upload)" });
-        await new Promise((r) => requestAnimationFrame(r)); // let 97% paint first
+        await nextPaint(); // let 97% paint before the synchronous GPU upload
         if (cancelled) return;
         onVolume(vol);
         setProgress({ fraction: 1, label: "ready" });
@@ -66,10 +68,15 @@ export function useVolumeLoader(datasetKey: string, onVolume: (vol: Volume) => v
       const what = files.length > 1 ? `${files.length} DICOM slices` : files[0].name;
       try {
         setError(null);
-        setProgress({ fraction: 0.3, label: `reading ${what}` });
-        const vol = await loadDroppedFiles(files);
+        setProgress({ fraction: 0.1, label: `reading ${what}` });
+        const vol = await decodeVolume({ kind: "files", files }, (p) => {
+          setProgress({
+            fraction: p.fraction,
+            label: `${p.phase === "parse" ? "building" : "reading"} ${what}`,
+          });
+        });
         setProgress({ fraction: 0.97, label: "building scene" });
-        await new Promise((r) => requestAnimationFrame(r));
+        await nextPaint();
         onVolume(vol);
         setProgress({ fraction: 1, label: "ready" });
         setTimeout(() => setProgress(null), 280);
