@@ -288,13 +288,24 @@ export default function App() {
     };
   }, []);
 
-  // --- Dev-only handles so the scene can be poked from the console.
+  // --- Dev-only handles so the scene can be poked from the console, plus the
+  //     feature-tour reel (Shift+D / `/?demo` / __demo()). The dynamic import
+  //     lives inside this DEV branch, so the production build tree-shakes the
+  //     whole reel out — its chunk is never emitted.
   useEffect(() => {
     if (import.meta.env.DEV) {
       (window as unknown as Record<string, unknown>).__leva = set;
       (window as unknown as Record<string, unknown>).__viewer = () => viewerRef.current;
+      import("./dev/demoReel").then((m) =>
+        m.installDemoReel({
+          set: set as unknown as (partial: Record<string, unknown>) => void,
+          get: get as unknown as (path: string) => unknown,
+          getViewer: () => viewerRef.current,
+          getVolume: () => volumeRef.current,
+        }),
+      );
     }
-  }, [set]);
+  }, [set, get]);
 
   // --- Leaving phone width while on a single-plane view drops back to 3D ("MPR"
   //     is the desktop grid) and closes the bottom sheet.
