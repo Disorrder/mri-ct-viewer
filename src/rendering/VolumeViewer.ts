@@ -173,10 +173,35 @@ export class VolumeViewer {
   private raycaster = new THREE.Raycaster();
   private tmpV = new THREE.Vector3();
 
+  // --- Touch pinch-zoom for the 2D views. OrbitControls already pinch-zooms the
+  // 3D camera, but the orthographic 2D views only had wheel zoom — so on a phone
+  // (no wheel) they wouldn't scale. We track the active touch points and, while
+  // two are down over a 2D viewport, drive the shared mprZoom from the ratio of
+  // their changing separation. The 3D quadrant keeps OrbitControls' pinch-dolly.
+  private touchPts = new Map<number, { x: number; y: number }>();
+  private pinchStartDist = 0;
+  private pinchStartZoom = 1;
+  private pinching = false;
+
   // In MPR, orbit only when the drag starts in the 3D (bottom-right) quadrant;
   // the 2D quadrants drive the crosshair. This runs in the *capture* phase so it
   // sets controls.enabled before OrbitControls' own pointerdown handler reads it.
   private onPointerDownCapture = (e: PointerEvent) => {
+    // A second finger over a 2D viewport starts a pinch on the shared mprZoom.
+    // Stopping propagation keeps it from also driving the crosshair drag (App)
+    // or OrbitControls; the 3D quadrant falls through to OrbitControls' pinch.
+    if (e.pointerType === "touch") {
+      this.touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this.touchPts.size === 2 && this.canPinch2D()) {
+        this.pinching = true;
+        this.pinchStartDist = this.pinchDist() || 1;
+        this.pinchStartZoom = this.mprZoom;
+        this.controls.enabled = false; // never orbit while pinching a 2D view
+        e.stopPropagation();
+        return;
+      }
+    }
+
     // Single-plane view: no orbit, no gizmo — the whole screen drives the crosshair.
     if (this.isSingle()) {
       this.controls.enabled = false;
@@ -233,6 +258,43 @@ export class VolumeViewer {
     this.hoveredGroup = -1;
     this.renderer.domElement.style.cursor = "";
   };
+
+  // Capture-phase so a live pinch can suppress the crosshair drag underneath it.
+  private onPointerMoveCapture = (e: PointerEvent) => {
+    if (e.pointerType !== "touch" || !this.touchPts.has(e.pointerId)) return;
+    this.touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!this.pinching || this.touchPts.size < 2) return;
+    const scale = this.pinchDist() / this.pinchStartDist;
+    this.mprZoom = Math.min(8, Math.max(0.4, this.pinchStartZoom * scale));
+    this.layoutCameras(this.container.clientWidth, this.container.clientHeight);
+    e.stopPropagation(); // freeze the crosshair while the fingers pinch
+    e.preventDefault();
+  };
+
+  private onPointerUpCapture = (e: PointerEvent) => {
+    if (e.pointerType !== "touch") return;
+    this.touchPts.delete(e.pointerId);
+    if (this.touchPts.size < 2) this.pinching = false;
+  };
+
+  /** Pixel separation of the two active touch points. */
+  private pinchDist(): number {
+    const [a, b] = [...this.touchPts.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  /** True when the two-finger centroid lands in a wheel-zoomable 2D viewport. */
+  private canPinch2D(): boolean {
+    if (this.isSingle()) return true; // whole screen is one 2D plane
+    if (this.layout !== "MPR") return false; // 3D layout: OrbitControls owns the pinch
+    const [a, b] = [...this.touchPts.values()];
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const cx = (a.x + b.x) / 2 - rect.left;
+    const cy = (a.y + b.y) / 2 - rect.top;
+    // The 3D (bottom-right) quadrant dollies via OrbitControls; the other three
+    // 2D quadrants share the mprZoom scale.
+    return !(cx >= rect.width / 2 && cy >= rect.height / 2);
+  }
 
   // Wheel over a 2D viewport zooms all three 2D views together; over the 3D
   // quadrant it falls through to OrbitControls' dolly. Capture phase so we can
@@ -338,6 +400,9 @@ export class VolumeViewer {
     });
     this.container.addEventListener("pointermove", this.onPointerMove);
     this.container.addEventListener("pointerleave", this.onPointerLeave);
+    this.container.addEventListener("pointermove", this.onPointerMoveCapture, true);
+    this.container.addEventListener("pointerup", this.onPointerUpCapture, true);
+    this.container.addEventListener("pointercancel", this.onPointerUpCapture, true);
 
     // Three fixed orthographic cameras for the 2D MPR viewports. Each sees only
     // its own slice plane + crosshair layer (set up in layoutCameras / setVolume).
@@ -1236,6 +1301,9 @@ export class VolumeViewer {
     } as EventListenerOptions);
     this.container.removeEventListener("pointermove", this.onPointerMove);
     this.container.removeEventListener("pointerleave", this.onPointerLeave);
+    this.container.removeEventListener("pointermove", this.onPointerMoveCapture, true);
+    this.container.removeEventListener("pointerup", this.onPointerUpCapture, true);
+    this.container.removeEventListener("pointercancel", this.onPointerUpCapture, true);
     if (this.gpuQuery) this.gl.deleteQuery(this.gpuQuery);
     this.ro.disconnect();
     this.controls.dispose();
